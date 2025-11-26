@@ -49,6 +49,15 @@ https://gobackup.github.io
 - etcd
 - Firebird
 
+#### Additional MySQL/MariaDB Backup Drivers
+
+- mariadb-dump - MariaDB's native logical dump tool
+- mysqlpump - MySQL's parallel dump utility
+- mydumper - High-performance multi-threaded backup tool
+- xtrabackup - Percona XtraBackup for hot physical backups
+
+See [docs/database-drivers.md](docs/database-drivers.md) for detailed configuration options.
+
 ### Storages
 
 - Local
