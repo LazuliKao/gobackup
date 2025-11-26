@@ -49,3 +49,32 @@ func TestBaseInterface(t *testing.T) {
 	assert.Equal(t, result, "aaa")
 	assert.Nil(t, err)
 }
+
+func TestRun_SevenZipVolumeSizeWithSplitter_ReturnsError(t *testing.T) {
+	compressViper := viper.New()
+	compressViper.Set("type", "7z")
+	compressViper.Set("volume_size", "100m")
+	compressViper.SetDefault("filename_format", "2006.01.02.15.04.05")
+
+	splitterViper := viper.New()
+	splitterViper.Set("chunk_size", "50m")
+
+	modelViper := viper.New()
+
+	model := config.ModelConfig{
+		Name:     "test",
+		TempPath: "/tmp",
+		DumpPath: "/tmp/test",
+		CompressWith: config.SubConfig{
+			Type:  "7z",
+			Name:  "7z",
+			Viper: compressViper,
+		},
+		Splitter: splitterViper,
+		Viper:    modelViper,
+	}
+
+	_, err := Run(model)
+	assert.NotNil(t, err)
+	assert.True(t, strings.Contains(err.Error(), "cannot use both 7z native volume splitting"))
+}

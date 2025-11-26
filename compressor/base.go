@@ -87,7 +87,12 @@ func Run(model config.ModelConfig) (string, error) {
 
 	// Select compressor based on type
 	if model.CompressWith.Type == "7z" || model.CompressWith.Type == "7zip" {
-		c = &SevenZip{Base: base}
+		sz := &SevenZip{Base: base}
+		// Check for conflict: 7z native volume splitting and external splitter cannot be used together
+		if sz.HasVolumeSize() && model.Splitter != nil {
+			return "", fmt.Errorf("cannot use both 7z native volume splitting (volume_size) and external splitter (split_with) at the same time")
+		}
+		c = sz
 	} else {
 		c = &Tar{Base: base}
 	}
