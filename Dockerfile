@@ -71,7 +71,24 @@ RUN case "$(uname -m)" in \
     mkdir -p /etcd-bin && \
     cp etcd-${ETCD_VER}-linux-${arch}/etcdctl /etcd-bin/etcdctl
 
-# Stage 6: Final runtime image
+# Stage 6: Build gobackup
+FROM golang:1.25-alpine AS gobackup-builder
+WORKDIR /build
+# Install build dependencies
+RUN apk add --no-cache git
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+# Copy source code
+COPY . .
+# Build with optimizations for minimal binary size
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
+    -trimpath \
+    -o gobackup \
+    .
+
+# Stage 7: Final runtime image
 FROM alpine:latest
 ARG VERSION=latest
 
@@ -131,8 +148,7 @@ COPY --from=influx-downloader /influx-bin/influx /usr/local/bin/influx
 # Copy etcdctl
 COPY --from=etcd-downloader /etcd-bin/etcdctl /usr/local/bin/etcdctl
 
-# Install gobackup
-ADD install /install
-RUN /install ${VERSION} && rm /install
+# Copy gobackup binary from builder stage
+COPY --from=gobackup-builder /build/gobackup /usr/local/bin/gobackup
 
 CMD ["/usr/local/bin/gobackup", "run"]
