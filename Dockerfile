@@ -1,6 +1,7 @@
 # Stage 1: Build mydumper from source
 FROM alpine:latest AS mydumper-builder
-ARG MYDUMPER_VERSION="0.16.9-3"
+# https://github.com/mydumper/mydumper/tags
+ARG MYDUMPER_VERSION="v0.21.1-1"
 RUN apk add --no-cache \
     curl \
     cmake \
@@ -20,7 +21,8 @@ RUN cd /tmp && \
 
 # Stage 2: Download and extract xtrabackup
 FROM alpine:latest AS xtrabackup-downloader
-ARG XTRABACKUP_VERSION="8.0.35-31"
+# https://github.com/percona/percona-xtrabackup/tags
+ARG XTRABACKUP_VERSION="9.1.0-1"
 RUN apk add --no-cache curl
 RUN mkdir -p /xtrabackup-bin && \
     case "$(uname -m)" in \
@@ -56,7 +58,8 @@ RUN case "$(uname -m)" in \
 
 # Stage 5: Download etcdctl
 FROM alpine:latest AS etcd-downloader
-ARG ETCD_VER="v3.5.11"
+# https://github.com/etcd-io/etcd/tags
+ARG ETCD_VER="v3.6.6"
 RUN apk add --no-cache curl
 RUN case "$(uname -m)" in \
       x86_64) arch=amd64 ;; \
