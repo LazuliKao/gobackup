@@ -168,4 +168,7 @@ COPY --from=etcd-downloader /etcd-bin/etcdctl /usr/local/bin/etcdctl
 # Copy gobackup binary from builder stage
 COPY --from=gobackup-builder /build/gobackup /usr/local/bin/gobackup
 
+# Create gobackup config directory
+RUN mkdir -p /root/.gobackup
+
 CMD ["/usr/local/bin/gobackup", "run"]
