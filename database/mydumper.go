@@ -18,23 +18,22 @@ import (
 // username: root
 // password:
 // tables:
-// exclude_tables:
 // threads: 4
 // compress: false
 // args:
+// Note: For table exclusion, use the 'args' option with mydumper's regex patterns
 type MyDumper struct {
 	Base
-	host          string
-	port          string
-	socket        string
-	database      string
-	username      string
-	password      string
-	tables        []string
-	excludeTables []string
-	threads       int
-	compress      bool
-	args          string
+	host     string
+	port     string
+	socket   string
+	database string
+	username string
+	password string
+	tables   []string
+	threads  int
+	compress bool
+	args     string
 }
 
 func (db *MyDumper) init() (err error) {
@@ -53,7 +52,6 @@ func (db *MyDumper) init() (err error) {
 	db.password = viper.GetString("password")
 
 	db.tables = viper.GetStringSlice("tables")
-	db.excludeTables = viper.GetStringSlice("exclude_tables")
 	db.threads = viper.GetInt("threads")
 	db.compress = viper.GetBool("compress")
 
@@ -96,9 +94,9 @@ func (db *MyDumper) build() string {
 		dumpArgs = append(dumpArgs, "--tables-list", table)
 	}
 
-	for _, table := range db.excludeTables {
-		dumpArgs = append(dumpArgs, "--regex", "^(?!"+db.database+"\\."+table+")")
-	}
+	// Note: mydumper uses --regex as an inclusion pattern.
+	// For excluding tables, use the 'regex' config option directly with proper PCRE syntax
+	// or use the 'args' config option to pass --ignore-table
 
 	if db.threads > 0 {
 		dumpArgs = append(dumpArgs, "--threads", fmt.Sprintf("%d", db.threads))
