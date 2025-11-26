@@ -1,7 +1,7 @@
 # Stage 1: Build mydumper from source
 FROM alpine:latest AS mydumper-builder
 # https://github.com/mydumper/mydumper/tags
-ARG MYDUMPER_VERSION="v0.21.1-1"
+ARG MYDUMPER_VERSION="0.21.1-1"
 RUN apk add --no-cache \
     curl \
     cmake \
@@ -19,20 +19,20 @@ RUN cd /tmp && \
     make && \
     make install
 
-# Stage 2: Download and extract xtrabackup
-FROM alpine:latest AS xtrabackup-downloader
-# https://github.com/percona/percona-xtrabackup/tags
-ARG XTRABACKUP_VERSION="9.1.0-1"
-RUN apk add --no-cache curl
-RUN mkdir -p /xtrabackup-bin && \
-    case "$(uname -m)" in \
-      x86_64) \
-        cd /tmp && \
-        curl -fLO "https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-${XTRABACKUP_VERSION}/binary/tarball/percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
-        tar xzf "percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
-        cp percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal/bin/* /xtrabackup-bin/ ;; \
-      *) echo 'XtraBackup not available for this architecture, skipping...' ;; \
-    esac
+# # Stage 2: Download and extract xtrabackup
+# FROM alpine:latest AS xtrabackup-downloader
+# # https://github.com/percona/percona-xtrabackup/tags
+# ARG XTRABACKUP_VERSION="8.4.0-4"
+# RUN apk add --no-cache curl
+# RUN mkdir -p /xtrabackup-bin && \
+#     case "$(uname -m)" in \
+#       x86_64) \
+#         cd /tmp && \
+#         curl -fLO "https://downloads.percona.com/downloads/Percona-XtraBackup-9.0/Percona-XtraBackup-${XTRABACKUP_VERSION}/binary/tarball/percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
+#         tar xzf "percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
+#         cp percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal/bin/* /xtrabackup-bin/ ;; \
+#       *) echo 'XtraBackup not available for this architecture, skipping...' ;; \
+#     esac
 
 # Stage 3: Download sqlpackage
 FROM alpine:latest AS sqlpackage-downloader
@@ -118,8 +118,8 @@ RUN apk add --no-cache \
 COPY --from=mydumper-builder /usr/local/bin/mydumper /usr/local/bin/mydumper
 COPY --from=mydumper-builder /usr/local/bin/myloader /usr/local/bin/myloader
 
-# Copy xtrabackup binaries (if they exist)
-COPY --from=xtrabackup-downloader /xtrabackup-bin/* /usr/local/bin/
+# # Copy xtrabackup binaries (if they exist)
+# COPY --from=xtrabackup-downloader /xtrabackup-bin/* /usr/local/bin/
 
 # Copy sqlpackage
 COPY --from=sqlpackage-downloader /opt/sqlpackage /opt/sqlpackage
