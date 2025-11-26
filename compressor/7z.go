@@ -42,7 +42,7 @@ func (sz *SevenZip) options() (opts []string) {
 
 	// Get compression level (0-9)
 	compressionLevel := sz.viper.GetInt("compression_level")
-	if compressionLevel > 0 && compressionLevel <= 9 {
+	if sz.viper.IsSet("compression_level") && compressionLevel >= 0 && compressionLevel <= 9 {
 		opts = append(opts, fmt.Sprintf("-mx=%d", compressionLevel))
 	}
 

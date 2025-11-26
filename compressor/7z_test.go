@@ -59,6 +59,23 @@ func TestSevenZip_optionsWithCompressionLevel(t *testing.T) {
 	assert.Equal(t, opts[1], "-mx=9")
 }
 
+func TestSevenZip_optionsWithCompressionLevelZero(t *testing.T) {
+	v := viper.New()
+	v.Set("compression_level", 0)
+	base := newBase(config.ModelConfig{
+		CompressWith: config.SubConfig{
+			Type:  "7z",
+			Name:  "7z",
+			Viper: v,
+		},
+	})
+
+	sz := &SevenZip{base}
+	opts := sz.options()
+	assert.Equal(t, opts[0], "a")
+	assert.Equal(t, opts[1], "-mx=0")
+}
+
 func TestSevenZip_optionsWithArgs(t *testing.T) {
 	v := viper.New()
 	v.Set("args", "-mmt=4")
