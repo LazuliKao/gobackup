@@ -12,7 +12,6 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.14.1
 	github.com/go-co-op/gocron v1.18.0
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/jlaffaye/ftp v0.1.0
 	github.com/joho/godotenv v1.4.0
@@ -56,7 +55,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect

@@ -68,6 +68,8 @@ func Run(model config.ModelConfig) (string, error) {
 		parallelProgram = "pixz"
 	case "zst", "tzst", "tar.zst":
 		ext = ".tar.zst"
+	case "7z", "7zip":
+		ext = ".7z"
 	case "tar":
 		ext = ".tar"
 	case "":
@@ -82,7 +84,13 @@ func Run(model config.ModelConfig) (string, error) {
 
 	base.ext = ext
 	base.parallelProgram = parallelProgram
-	c = &Tar{Base: base}
+
+	// Select compressor based on type
+	if model.CompressWith.Type == "7z" || model.CompressWith.Type == "7zip" {
+		c = &SevenZip{Base: base}
+	} else {
+		c = &Tar{Base: base}
+	}
 
 	logger.Info("=> Compress | " + model.CompressWith.Type)
 
