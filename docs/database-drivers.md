@@ -31,18 +31,18 @@ databases:
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `type` | - | Must be `mariadb-dump` |
-| `host` | `127.0.0.1` | Database host |
-| `port` | `3306` | Database port |
-| `socket` | - | Unix socket path (overrides host/port if set) |
-| `database` | - | **Required.** Database name to backup |
-| `username` | `root` | Database username |
-| `password` | - | Database password |
-| `tables` | - | List of specific tables to backup |
-| `exclude_tables` | - | List of tables to exclude from backup |
-| `args` | - | Additional command-line arguments |
+| Option           | Default     | Description                                   |
+| ---------------- | ----------- | --------------------------------------------- |
+| `type`           | -           | Must be `mariadb-dump`                        |
+| `host`           | `127.0.0.1` | Database host                                 |
+| `port`           | `3306`      | Database port                                 |
+| `socket`         | -           | Unix socket path (overrides host/port if set) |
+| `database`       | -           | **Required.** Database name to backup         |
+| `username`       | `root`      | Database username                             |
+| `password`       | -           | Database password                             |
+| `tables`         | -           | List of specific tables to backup             |
+| `exclude_tables` | -           | List of tables to exclude from backup         |
+| `args`           | -           | Additional command-line arguments             |
 
 ---
 
@@ -77,19 +77,19 @@ databases:
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `type` | - | Must be `mysqlpump` |
-| `host` | `127.0.0.1` | Database host |
-| `port` | `3306` | Database port |
-| `socket` | - | Unix socket path (overrides host/port if set) |
-| `database` | - | **Required.** Database name to backup |
-| `username` | `root` | Database username |
-| `password` | - | Database password |
-| `parallel` | `2` | Number of parallel threads for dumping |
-| `tables` | - | List of specific tables to backup |
-| `exclude_tables` | - | List of tables to exclude from backup |
-| `args` | - | Additional command-line arguments |
+| Option           | Default     | Description                                   |
+| ---------------- | ----------- | --------------------------------------------- |
+| `type`           | -           | Must be `mysqlpump`                           |
+| `host`           | `127.0.0.1` | Database host                                 |
+| `port`           | `3306`      | Database port                                 |
+| `socket`         | -           | Unix socket path (overrides host/port if set) |
+| `database`       | -           | **Required.** Database name to backup         |
+| `username`       | `root`      | Database username                             |
+| `password`       | -           | Database password                             |
+| `parallel`       | `2`         | Number of parallel threads for dumping        |
+| `tables`         | -           | List of specific tables to backup             |
+| `exclude_tables` | -           | List of tables to exclude from backup         |
+| `args`           | -           | Additional command-line arguments             |
 
 ---
 
@@ -122,19 +122,19 @@ databases:
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `type` | - | Must be `mydumper` |
-| `host` | `127.0.0.1` | Database host |
-| `port` | `3306` | Database port |
-| `socket` | - | Unix socket path (overrides host/port if set) |
-| `database` | - | Database name to backup |
-| `username` | `root` | Database username |
-| `password` | - | Database password |
-| `threads` | `4` | Number of threads for parallel dumping |
-| `compress` | `false` | Enable compression of output files |
-| `tables` | - | List of specific tables to backup |
-| `args` | - | Additional command-line arguments |
+| Option     | Default     | Description                                   |
+| ---------- | ----------- | --------------------------------------------- |
+| `type`     | -           | Must be `mydumper`                            |
+| `host`     | `127.0.0.1` | Database host                                 |
+| `port`     | `3306`      | Database port                                 |
+| `socket`   | -           | Unix socket path (overrides host/port if set) |
+| `database` | -           | Database name to backup                       |
+| `username` | `root`      | Database username                             |
+| `password` | -           | Database password                             |
+| `threads`  | `4`         | Number of threads for parallel dumping        |
+| `compress` | `false`     | Enable compression of output files            |
+| `tables`   | -           | List of specific tables to backup             |
+| `args`     | -           | Additional command-line arguments             |
 
 ### Notes
 
@@ -169,18 +169,18 @@ databases:
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `type` | - | Must be `xtrabackup` |
-| `host` | `127.0.0.1` | Database host |
-| `port` | `3306` | Database port |
-| `socket` | - | Unix socket path (overrides host/port if set) |
-| `database` | - | Specific database to backup (backs up all if not set) |
-| `username` | `root` | Database username |
-| `password` | - | Database password |
-| `parallel` | `1` | Number of parallel threads for backup |
-| `compress` | `false` | Enable compression |
-| `args` | - | Additional command-line arguments |
+| Option     | Default     | Description                                           |
+| ---------- | ----------- | ----------------------------------------------------- |
+| `type`     | -           | Must be `xtrabackup`                                  |
+| `host`     | `127.0.0.1` | Database host                                         |
+| `port`     | `3306`      | Database port                                         |
+| `socket`   | -           | Unix socket path (overrides host/port if set)         |
+| `database` | -           | Specific database to backup (backs up all if not set) |
+| `username` | `root`      | Database username                                     |
+| `password` | -           | Database password                                     |
+| `parallel` | `1`         | Number of parallel threads for backup                 |
+| `compress` | `false`     | Enable compression                                    |
+| `args`     | -           | Additional command-line arguments                     |
 
 ### Notes
 
@@ -193,14 +193,14 @@ databases:
 
 ## Comparison
 
-| Feature | mariadb-dump | mysqlpump | mydumper | xtrabackup |
-|---------|--------------|-----------|----------|------------|
-| Backup Type | Logical | Logical | Logical | Physical |
-| Parallel Processing | No | Yes | Yes | Yes |
-| Hot Backup | No | No | Yes | Yes |
-| Compression | Via args | Via args | Built-in | Built-in |
-| Table Selection | Yes | Yes | Yes | Limited |
-| Best For | Small DBs | Medium DBs | Large DBs | Large DBs, minimal downtime |
+| Feature             | mariadb-dump | mysqlpump  | mydumper  | xtrabackup                  |
+| ------------------- | ------------ | ---------- | --------- | --------------------------- |
+| Backup Type         | Logical      | Logical    | Logical   | Physical                    |
+| Parallel Processing | No           | Yes        | Yes       | Yes                         |
+| Hot Backup          | No           | No         | Yes       | Yes                         |
+| Compression         | Via args     | Via args   | Built-in  | Built-in                    |
+| Table Selection     | Yes          | Yes        | Yes       | Limited                     |
+| Best For            | Small DBs    | Medium DBs | Large DBs | Large DBs, minimal downtime |
 
 ---
 
