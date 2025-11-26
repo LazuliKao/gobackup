@@ -71,8 +71,23 @@ RUN case "$(uname -m)" in \
     mkdir -p /etcd-bin && \
     cp etcd-${ETCD_VER}-linux-${arch}/etcdctl /etcd-bin/etcdctl
 
-# Stage 6: Build gobackup
-FROM golang:1.25-alpine AS gobackup-builder
+# Stage 6: Build web assets
+FROM node:20-alpine AS web-builder
+WORKDIR /build/web
+# Install git (required by some yarn dependencies)
+RUN apk add --no-cache git
+# Copy web package files
+COPY web/package.json web/yarn.lock* ./
+# Install dependencies
+RUN yarn install --frozen-lockfile
+# Copy web source
+COPY web/ ./
+# Build web assets
+RUN yarn build
+
+# Stage 7: Build gobackup
+FROM golang:1.21-alpine AS gobackup-builder
+ARG VERSION=dev
 WORKDIR /build
 # Install build dependencies
 RUN apk add --no-cache git
@@ -81,16 +96,18 @@ COPY go.mod go.sum ./
 RUN go mod download
 # Copy source code
 COPY . .
+# Copy built web assets from previous stage
+COPY --from=web-builder /build/web/dist ./web/dist
 # Build with optimizations for minimal binary size
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
+    -ldflags="-s -w -X main.Version=${VERSION}" \
     -trimpath \
     -o gobackup \
     .
 
-# Stage 7: Final runtime image
+# Stage 8: Final runtime image
 FROM alpine:latest
-ARG VERSION=latest
+ARG VERSION=dev
 
 # Install runtime dependencies only
 RUN apk add --no-cache \
