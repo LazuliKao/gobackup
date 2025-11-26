@@ -24,6 +24,8 @@ RUN apk add \
   xz \
   # pixz is in edge atm
   zstd \
+  # 7z compression with password support
+  7zip \
   # microsoft sql dependencies \
   libstdc++ \
   gcompat \
