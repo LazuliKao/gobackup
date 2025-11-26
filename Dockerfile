@@ -72,7 +72,7 @@ RUN case "$(uname -m)" in \
     cp etcd-${ETCD_VER}-linux-${arch}/etcdctl /etcd-bin/etcdctl
 
 # Stage 6: Build web assets
-FROM node:20-alpine AS web-builder
+FROM node:24-alpine AS web-builder
 WORKDIR /build/web
 # Install git (required by some yarn dependencies)
 RUN apk add --no-cache git
@@ -86,7 +86,7 @@ COPY web/ ./
 RUN yarn build
 
 # Stage 7: Build gobackup
-FROM golang:1.21-alpine AS gobackup-builder
+FROM golang:1.25-alpine AS gobackup-builder
 ARG VERSION=dev
 WORKDIR /build
 # Install build dependencies
