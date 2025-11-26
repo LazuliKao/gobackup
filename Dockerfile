@@ -30,8 +30,44 @@ RUN apk add \
   icu \
   # support change timezone
   tzdata \
+  # mydumper build dependencies
+  cmake \
+  make \
+  g++ \
+  glib-dev \
+  pcre-dev \
+  zlib-dev \
+  mariadb-dev \
   && \
   rm -rf /var/cache/apk/*
+
+# Install mydumper from source
+ARG MYDUMPER_VERSION="0.16.9-3"
+RUN cd /tmp && \
+    curl -fLO "https://github.com/mydumper/mydumper/archive/refs/tags/v${MYDUMPER_VERSION}.tar.gz" && \
+    tar xzf "v${MYDUMPER_VERSION}.tar.gz" && \
+    cd "mydumper-${MYDUMPER_VERSION}" && \
+    cmake . && \
+    make && \
+    make install && \
+    cd /tmp && \
+    rm -rf "mydumper-${MYDUMPER_VERSION}" "v${MYDUMPER_VERSION}.tar.gz" && \
+    mydumper --version
+
+# Install Percona XtraBackup
+# Note: XtraBackup is only available for x86_64 and requires glibc
+ARG XTRABACKUP_VERSION="8.0.35-31"
+RUN case "$(uname -m)" in \
+      x86_64) \
+        cd /tmp && \
+        curl -fLO "https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-${XTRABACKUP_VERSION}/binary/tarball/percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
+        tar xzf "percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
+        cp percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal/bin/* /usr/local/bin/ && \
+        rm -rf "percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal" \
+               "percona-xtrabackup-${XTRABACKUP_VERSION}-Linux-x86_64.glibc2.17-minimal.tar.gz" && \
+        xtrabackup --version ;; \
+      *) echo 'XtraBackup not available for this architecture, skipping...' ;; \
+    esac
 
 WORKDIR /tmp
 RUN wget https://aka.ms/sqlpackage-linux && \
