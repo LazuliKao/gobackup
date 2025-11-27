@@ -2,10 +2,13 @@ package compressor
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/gobackup/gobackup/helper"
+	"github.com/gobackup/gobackup/logger"
 )
 
 // SevenZip compressor for 7z archives with optional password encryption
@@ -25,7 +28,7 @@ func (sz *SevenZip) HasVolumeSize() bool {
 	return len(sz.viper.GetString("volume_size")) > 0
 }
 
-func (sz *SevenZip) perform() (archivePaths []string, err error) {
+func (sz *SevenZip) perform() (archivePath string, err error) {
 	filePath := sz.archiveFilePath(sz.ext)
 
 	opts := sz.options()
@@ -34,21 +37,21 @@ func (sz *SevenZip) perform() (archivePaths []string, err error) {
 
 	_, err = helper.Exec("7z", opts...)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// When volume_size is set, 7z creates multiple volume files like: archive.7z.001, archive.7z.002, etc.
 	// We need to collect all these volume files
 	if sz.HasVolumeSize() {
-		archivePaths, err = sz.collectVolumeFiles(filePath)
+		archivePath, err = sz.collectVolumeFiles(filePath)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	} else {
-		archivePaths = []string{filePath}
+		archivePath = filePath
 	}
 
-	return archivePaths, nil
+	return archivePath, nil
 }
 
 func (sz *SevenZip) options() (opts []string) {
@@ -91,20 +94,57 @@ func (sz *SevenZip) options() (opts []string) {
 
 // collectVolumeFiles finds all volume files created by 7z when using volume splitting.
 // 7z creates files like: archive.7z.001, archive.7z.002, etc.
-func (sz *SevenZip) collectVolumeFiles(basePath string) ([]string, error) {
+// If only one volume file exists (.001), it renames it to remove the .001 suffix.
+// If multiple volume files exist, it moves them into a date-named directory (similar to splitter).
+func (sz *SevenZip) collectVolumeFiles(basePath string) (string, error) {
+	logger := logger.Tag("Compressor")
+
 	// 7z volume files follow the pattern: basePath.001, basePath.002, etc.
 	pattern := basePath + ".*"
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find volume files: %w", err)
+		return "", fmt.Errorf("failed to find volume files: %w", err)
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("no volume files found matching pattern: %s", pattern)
+		return "", fmt.Errorf("no volume files found matching pattern: %s", pattern)
 	}
 
 	// Sort to ensure consistent ordering (001, 002, 003, ...)
 	sort.Strings(matches)
 
-	return matches, nil
+	// If only one volume file (.001), rename it to remove the suffix
+	if len(matches) == 1 {
+		oldPath := matches[0]
+		// Remove .001 suffix: archive.7z.001 -> archive.7z
+		newPath := strings.TrimSuffix(oldPath, ".001")
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return "", fmt.Errorf("failed to rename single volume file: %w", err)
+		}
+		logger.Infof("Renamed single volume %s -> %s", filepath.Base(oldPath), filepath.Base(newPath))
+		return newPath, nil
+	}
+
+	// Multiple volume files: move them into a date-named directory (similar to splitter)
+	// basePath: /tmp/gobackup.../2022.12.04.07.24.08.7z
+	// archiveDirPath: /tmp/gobackup.../2022.12.04.07.24.08
+	archiveDirPath := strings.TrimSuffix(basePath, sz.ext)
+	if err := helper.MkdirP(archiveDirPath); err != nil {
+		return "", fmt.Errorf("failed to create archive directory: %w", err)
+	}
+
+	// Move all volume files into the directory
+	for _, oldPath := range matches {
+		fileName := filepath.Base(oldPath)
+		newPath := filepath.Join(archiveDirPath, fileName)
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return "", fmt.Errorf("failed to move volume file %s: %w", fileName, err)
+		}
+	}
+
+	logger.Infof("Moved %d volume files into %s", len(matches), filepath.Base(archiveDirPath))
+
+	// Return the directory path containing volume files
+	// The storage layer will handle reading files from this directory
+	return archiveDirPath, nil
 }

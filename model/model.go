@@ -61,22 +61,22 @@ func (m Model) Perform() (err error) {
 	}
 
 	// It always to use compressor, default use tar, even not enable compress.
-	archivePaths, err := compressor.Run(m.Config)
+	archivePath, err := compressor.Run(m.Config)
 	if err != nil {
 		return
 	}
 
-	archivePaths, err = encryptor.Run(archivePaths, m.Config)
+	archivePath, err = encryptor.Run(archivePath, m.Config)
 	if err != nil {
 		return
 	}
 
-	archivePaths, err = splitter.Run(archivePaths, m.Config)
+	archivePath, err = splitter.Run(archivePath, m.Config)
 	if err != nil {
 		return
 	}
 
-	err = storage.Run(m.Config, archivePaths)
+	err = storage.Run(m.Config, archivePath)
 	if err != nil {
 		return
 	}

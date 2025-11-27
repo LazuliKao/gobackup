@@ -23,7 +23,7 @@ type Base struct {
 
 // Compressor
 type Compressor interface {
-	perform() (archivePaths []string, err error)
+	perform() (archivePath string, err error)
 }
 
 func (c *Base) archiveFilePath(ext string) string {
@@ -40,8 +40,8 @@ func newBase(model config.ModelConfig) (base Base) {
 	return
 }
 
-// Run compressor, return archive paths (multiple paths when using 7z volume splitting)
-func Run(model config.ModelConfig) ([]string, error) {
+// Run compressor, return archive path (single file or directory containing split files)
+func Run(model config.ModelConfig) (string, error) {
 	logger := logger.Tag("Compressor")
 
 	base := newBase(model)
@@ -76,7 +76,7 @@ func Run(model config.ModelConfig) ([]string, error) {
 		ext = ".tar"
 		model.CompressWith.Type = "tar"
 	default:
-		return nil, fmt.Errorf("Unsupported compress type: %s", model.CompressWith.Type)
+		return "", fmt.Errorf("Unsupported compress type: %s", model.CompressWith.Type)
 	}
 
 	// save Extension
@@ -90,7 +90,7 @@ func Run(model config.ModelConfig) ([]string, error) {
 		sz := &SevenZip{Base: base}
 		// Check for conflict: 7z native volume splitting and external splitter cannot be used together
 		if sz.HasVolumeSize() && model.Splitter != nil {
-			return nil, fmt.Errorf("cannot use both 7z native volume splitting (volume_size) and external splitter (split_with) at the same time")
+			return "", fmt.Errorf("cannot use both 7z native volume splitting (volume_size) and external splitter (split_with) at the same time")
 		}
 		c = sz
 	} else {
@@ -101,19 +101,19 @@ func Run(model config.ModelConfig) ([]string, error) {
 
 	if err := helper.MkdirP(model.DumpPath); err != nil {
 		logger.Errorf("Failed to mkdir dump path %s: %v", model.DumpPath, err)
-		return nil, err
+		return "", err
 	}
 
 	// set workdir
 	if err := os.Chdir(filepath.Join(model.DumpPath, "../")); err != nil {
-		return nil, fmt.Errorf("chdir to dump path: %s: %w", model.DumpPath, err)
+		return "", fmt.Errorf("chdir to dump path: %s: %w", model.DumpPath, err)
 	}
 
-	archivePaths, err := c.perform()
+	archivePath, err := c.perform()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	logger.Info("->", archivePaths)
+	logger.Info("->", archivePath)
 
-	return archivePaths, nil
+	return archivePath, nil
 }
