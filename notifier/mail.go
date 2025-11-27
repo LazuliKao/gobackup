@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+// TLS modes for mail notifier
+const (
+	TLSModeNone     = "none"     // No encryption at all
+	TLSModeStartTLS = "starttls" // STARTTLS upgrade
+	TLSModeTLS      = "tls"      // Full TLS from start
+)
+
 type Mail struct {
 	// Base is the base notifier
 	from     string
@@ -18,7 +25,7 @@ type Mail struct {
 	password string
 	host     string
 	port     string
-	tls      bool
+	tls      string // "none", "starttls", or "tls"
 }
 
 func NewMail(base *Base) (*Mail, error) {
@@ -34,6 +41,23 @@ func NewMail(base *Base) (*Mail, error) {
 		from = username
 	}
 
+	// Determine TLS mode from "tls" config
+	// Supports: "none", "starttls", "tls", true (=tls), false (=starttls)
+	tlsMode := TLSModeStartTLS // default
+	tlsValue := base.viper.Get("tls")
+	if tlsValue != nil {
+		switch v := tlsValue.(type) {
+		case string:
+			tlsMode = v
+		case bool:
+			if v {
+				tlsMode = TLSModeTLS
+			} else {
+				tlsMode = TLSModeStartTLS
+			}
+		}
+	}
+
 	return &Mail{
 		username: username,
 		password: base.viper.GetString("password"),
@@ -41,7 +65,7 @@ func NewMail(base *Base) (*Mail, error) {
 		from:     from,
 		host:     base.viper.GetString("host"),
 		port:     base.viper.GetString("port"),
-		tls:      base.viper.GetBool("tls"),
+		tls:      tlsMode,
 	}, nil
 }
 
@@ -51,6 +75,21 @@ func (s Mail) getAddr() string {
 
 func (s Mail) getAuth() smtp.Auth {
 	return smtp.PlainAuth("", s.username, s.password, s.host)
+}
+
+// unencryptedAuth is a custom Auth that works over unencrypted connections
+type unencryptedAuth struct {
+	smtp.Auth
+}
+
+func (a unencryptedAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	// Allow unencrypted connections by setting TLS to true temporarily
+	server.TLS = true
+	return a.Auth.Start(server)
+}
+
+func (s Mail) getUnencryptedAuth() smtp.Auth {
+	return unencryptedAuth{smtp.PlainAuth("", s.username, s.password, s.host)}
 }
 
 func (s Mail) buildBody(title string, message string) string {
@@ -78,25 +117,116 @@ func (s Mail) buildBody(title string, message string) string {
 }
 
 func (s *Mail) notify(title string, message string) error {
-	var auth smtp.Auth
-	if len(s.password) == 0 {
-		auth = nil
-	} else {
-		auth = s.getAuth()
-	}
 	// Connect to the server, authenticate, set the sender and recipient,
 	// and send the email all in one step.
-	to := s.to
 	msg := s.buildBody(title, message)
 
-	if s.tls {
-		return s.sendByTLS(auth, []byte(msg))
-	} else {
-		return smtp.SendMail(s.getAddr(), auth, s.from, to, []byte(msg))
+	switch s.tls {
+	case TLSModeTLS:
+		return s.sendByTLS([]byte(msg))
+	case TLSModeNone:
+		return s.sendPlain([]byte(msg))
+	case TLSModeStartTLS:
+		fallthrough
+	default:
+		return s.sendByStartTLS([]byte(msg))
 	}
 }
 
-func (s *Mail) sendByTLS(auth smtp.Auth, msg []byte) error {
+// sendPlain sends email without any encryption (TLS mode: none)
+func (s *Mail) sendPlain(msg []byte) error {
+	conn, err := smtp.Dial(s.getAddr())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if len(s.password) > 0 {
+		ok, _ := conn.Extension("AUTH")
+		if ok {
+			// Use unencrypted auth for plain connections
+			auth := s.getUnencryptedAuth()
+			if err = conn.Auth(auth); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err = conn.Mail(s.from); err != nil {
+		return err
+	}
+	for _, addr := range s.to {
+		if err = conn.Rcpt(addr); err != nil {
+			return err
+		}
+	}
+
+	w, err := conn.Data()
+	if err != nil {
+		return err
+	}
+	if _, err = w.Write(msg); err != nil {
+		return err
+	}
+	if err = w.Close(); err != nil {
+		return err
+	}
+
+	conn.Quit()
+	return nil
+}
+
+// sendByStartTLS sends email using STARTTLS upgrade (TLS mode: starttls)
+func (s *Mail) sendByStartTLS(msg []byte) error {
+	conn, err := smtp.Dial(s.getAddr())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Upgrade to TLS using STARTTLS
+	if ok, _ := conn.Extension("STARTTLS"); ok {
+		config := &tls.Config{ServerName: s.host}
+		if err = conn.StartTLS(config); err != nil {
+			return err
+		}
+	}
+
+	if len(s.password) > 0 {
+		ok, _ := conn.Extension("AUTH")
+		if ok {
+			auth := s.getAuth()
+			if err = conn.Auth(auth); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err = conn.Mail(s.from); err != nil {
+		return err
+	}
+	for _, addr := range s.to {
+		if err = conn.Rcpt(addr); err != nil {
+			return err
+		}
+	}
+
+	w, err := conn.Data()
+	if err != nil {
+		return err
+	}
+	if _, err = w.Write(msg); err != nil {
+		return err
+	}
+	if err = w.Close(); err != nil {
+		return err
+	}
+
+	conn.Quit()
+	return nil
+}
+
+func (s *Mail) sendByTLS(msg []byte) error {
 	conn, err := tls.Dial("tcp", s.getAddr(), nil)
 	if err != nil {
 		return err
@@ -108,11 +238,12 @@ func (s *Mail) sendByTLS(auth smtp.Auth, msg []byte) error {
 		return err
 	}
 
-	if auth != nil {
+	if len(s.password) > 0 {
 		ok, _ := client.Extension("AUTH")
 		if !ok {
 			return errors.New("smtp: server doesn't support AUTH")
 		}
+		auth := s.getAuth()
 		if err = client.Auth(auth); err != nil {
 			return err
 		}
@@ -131,10 +262,13 @@ func (s *Mail) sendByTLS(auth smtp.Auth, msg []byte) error {
 	if err != nil {
 		return err
 	}
-	defer w.Close()
 	if _, err = w.Write(msg); err != nil {
 		return err
 	}
+	if err = w.Close(); err != nil {
+		return err
+	}
 
-	return client.Quit()
+	client.Quit()
+	return nil
 }
