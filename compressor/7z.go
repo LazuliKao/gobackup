@@ -2,6 +2,8 @@ package compressor
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 
 	"github.com/gobackup/gobackup/helper"
 )
@@ -23,17 +25,30 @@ func (sz *SevenZip) HasVolumeSize() bool {
 	return len(sz.viper.GetString("volume_size")) > 0
 }
 
-func (sz *SevenZip) perform() (archivePath string, err error) {
+func (sz *SevenZip) perform() (archivePaths []string, err error) {
 	filePath := sz.archiveFilePath(sz.ext)
 
 	opts := sz.options()
 	opts = append(opts, filePath)
 	opts = append(opts, sz.name)
-	archivePath = filePath
 
 	_, err = helper.Exec("7z", opts...)
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	// When volume_size is set, 7z creates multiple volume files like: archive.7z.001, archive.7z.002, etc.
+	// We need to collect all these volume files
+	if sz.HasVolumeSize() {
+		archivePaths, err = sz.collectVolumeFiles(filePath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		archivePaths = []string{filePath}
+	}
+
+	return archivePaths, nil
 }
 
 func (sz *SevenZip) options() (opts []string) {
@@ -72,4 +87,24 @@ func (sz *SevenZip) options() (opts []string) {
 	}
 
 	return
+}
+
+// collectVolumeFiles finds all volume files created by 7z when using volume splitting.
+// 7z creates files like: archive.7z.001, archive.7z.002, etc.
+func (sz *SevenZip) collectVolumeFiles(basePath string) ([]string, error) {
+	// 7z volume files follow the pattern: basePath.001, basePath.002, etc.
+	pattern := basePath + ".*"
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find volume files: %w", err)
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no volume files found matching pattern: %s", pattern)
+	}
+
+	// Sort to ensure consistent ordering (001, 002, 003, ...)
+	sort.Strings(matches)
+
+	return matches, nil
 }

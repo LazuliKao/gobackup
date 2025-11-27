@@ -27,29 +27,39 @@ func newBase(archivePath string, model config.ModelConfig) (base *Base) {
 	return
 }
 
-// Run compressor
-func Run(archivePath string, model config.ModelConfig) (encryptPath string, err error) {
+// Run encryptor on multiple archive paths
+func Run(archivePaths []string, model config.ModelConfig) (encryptPaths []string, err error) {
 	logger := logger.Tag("Encryptor")
 
-	base := newBase(archivePath, model)
-	var enc Encryptor
-	switch model.EncryptWith.Type {
-	case "openssl":
-		enc = NewOpenSSL(base)
-	default:
-		encryptPath = archivePath
-		return
+	// If no encryption configured, return paths as-is
+	if model.EncryptWith.Type == "" {
+		return archivePaths, nil
 	}
 
 	logger.Info("encrypt | " + model.EncryptWith.Type)
-	encryptPath, err = enc.perform()
-	if err != nil {
-		return
+
+	encryptPaths = make([]string, 0, len(archivePaths))
+	for _, archivePath := range archivePaths {
+		base := newBase(archivePath, model)
+		var enc Encryptor
+		switch model.EncryptWith.Type {
+		case "openssl":
+			enc = NewOpenSSL(base)
+		default:
+			encryptPaths = append(encryptPaths, archivePath)
+			continue
+		}
+
+		encryptPath, err := enc.perform()
+		if err != nil {
+			return nil, err
+		}
+		logger.Info("encrypted:", encryptPath)
+		encryptPaths = append(encryptPaths, encryptPath)
 	}
-	logger.Info("encrypted:", encryptPath)
 
 	// save Extension
 	model.Viper.Set("Ext", model.Viper.GetString("Ext")+".enc")
 
-	return
+	return encryptPaths, nil
 }

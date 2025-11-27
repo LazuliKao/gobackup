@@ -10,17 +10,19 @@ type Tar struct {
 	Base
 }
 
-func (tar *Tar) perform() (archivePath string, err error) {
+func (tar *Tar) perform() (archivePaths []string, err error) {
 	filePath := tar.archiveFilePath(tar.ext)
 
 	opts := tar.options()
 	opts = append(opts, filePath)
 	opts = append(opts, tar.name)
-	archivePath = filePath
 
 	_, err = helper.Exec("tar", opts...)
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return []string{filePath}, nil
 }
 
 func (tar *Tar) options() (opts []string) {

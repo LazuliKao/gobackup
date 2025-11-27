@@ -136,12 +136,26 @@ func new(model config.ModelConfig, archivePath string, storageConfig config.SubC
 }
 
 // run storage
-func runModel(model config.ModelConfig, archivePath string, storageConfig config.SubConfig) (err error) {
+func runModel(model config.ModelConfig, archivePaths []string, storageConfig config.SubConfig) (err error) {
 	logger := logger.Tag("Storage")
 
-	newFileKey := filepath.Base(archivePath)
-	base, s := new(model, archivePath, storageConfig)
+	// Handle the first archive path to set up the base
+	// This determines if we're dealing with a directory or individual files
+	primaryPath := archivePaths[0]
+	base, s := new(model, primaryPath, storageConfig)
 
+	// If we have multiple archive paths (e.g., from 7z volume splitting),
+	// and they are individual files (not a directory), collect their keys
+	if len(archivePaths) > 1 {
+		base.fileKeys = make([]string, len(archivePaths))
+		for i, p := range archivePaths {
+			base.fileKeys[i] = filepath.Base(p)
+		}
+		// Store all paths for upload
+		base.archivePath = filepath.Dir(archivePaths[0])
+	}
+
+	newFileKey := filepath.Base(primaryPath)
 	logger.Info("=> Storage | " + storageConfig.Type)
 	err = s.open()
 	if err != nil {
@@ -159,12 +173,12 @@ func runModel(model config.ModelConfig, archivePath string, storageConfig config
 }
 
 // Run storage
-func Run(model config.ModelConfig, archivePath string) (err error) {
+func Run(model config.ModelConfig, archivePaths []string) (err error) {
 	var errors []error
 
 	n := len(model.Storages)
 	for _, storageConfig := range model.Storages {
-		err := runModel(model, archivePath, storageConfig)
+		err := runModel(model, archivePaths, storageConfig)
 		if err != nil {
 			if n == 1 {
 				return err
