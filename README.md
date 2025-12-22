@@ -48,6 +48,7 @@ https://gobackup.github.io
 - MariaDB
 - etcd
 - Firebird
+- FoundationDB
 
 #### Additional MySQL/MariaDB Backup Drivers
 

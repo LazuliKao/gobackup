@@ -204,11 +204,181 @@ databases:
 
 ---
 
-## Docker Support
+## FoundationDB
 
-When using the GoBackup Docker image, all these tools are pre-installed:
+FoundationDB's native backup tool. Supports continuous backups, distributed backup agents, and backup to local or blob storage (S3-compatible).
 
-- `mariadb-dump` - Included with MariaDB client
-- `mysqlpump` - MySQL-specific tool (may require MySQL client installation)
-- `mydumper` - Compiled from source in the Docker image
+### Configuration
+
+```yaml
+databases:
+  # Minimal configuration - backup_url is optional
+  my_foundationdb:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+    
+  # Full configuration example
+  my_foundationdb_full:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+    tag: default
+    backup_url: file:///backup/foundationdb  # Optional, defaults to GoBackup dump directory
+    continuous: false
+    snapshot_interval: 864000
+    # Optional: specify key ranges to backup
+    key_ranges:
+      - "users "
+      - "orders "
+    # Optional: blob credentials file
+    blob_credentials: /etc/foundationdb/blob_credentials.json
+    # Optional: use partitioned log (experimental)
+    partitioned_log: false
+    # Optional: additional command-line arguments
+    args: "--initial-snapshot-interval 60"
+```
+
+### Backup URL Formats
+
+**Local Directory:**
+```yaml
+backup_url: file:///absolute/path/to/backup
+```
+
+**S3-compatible Blob Store:**
+```yaml
+backup_url: blobstore://ACCESS_KEY:SECRET_KEY@s3.amazonaws.com/backup-name?bucket=my-bucket&region=us-west-2
+```
+
+**Azure Blob Storage:**
+```yaml
+backup_url: blobstore://ACCOUNT_NAME:ACCESS_KEY@account.blob.core.windows.net/backup-name?bucket=container-name
+```
+
+### Options
+
+| Option                | Default                         | Description                                                    |
+| --------------------- | ------------------------------- | -------------------------------------------------------------- |
+| `type`                | -                               | Must be `foundationdb`                                         |
+| `cluster_file`        | `/etc/foundationdb/fdb.cluster` | Path to FoundationDB cluster file                              |
+| `tag`                 | `default`                       | Backup tag name (for managing multiple backups)                |
+| `backup_url`          | `file://<dump_path>`            | **Optional.** Backup destination URL (file:// or blobstore://) |
+| `continuous`          | `false`                         | Enable continuous backup mode                                  |
+| `snapshot_interval`   | `864000`                        | Snapshot interval in seconds (default: 10 days)                |
+| `partitioned_log`     | `false`                         | Use partitioned logs (experimental, requires fast restore)     |
+| `key_ranges`          | -                               | List of key ranges to backup (format: "BEGIN END")             |
+| `blob_credentials`    | -                               | Path to blob credentials JSON file                             |
+| `args`                | -                               | Additional command-line arguments for fdbbackup                |
+| `before_script`       | -                               | Script to run before backup                                    |
+| `after_script`        | -                               | Script to run after backup                                     |
+
+### Key Range Format
+
+Key ranges are specified as strings with optional begin and end:
+- `"users "` - Backs up keys starting with "users" up to "users\xff"
+- `"orders products"` - Backs up keys from "orders" to "products"
+- `"apple banana"` and `"mango pineapple"` - Multiple ranges
+
+### Continuous vs One-time Backup
+
+**One-time Backup** (`continuous: false`):
+- Creates a consistent point-in-time snapshot
+- Backup completes and stops
+- Use `-w` flag to wait for completion
+
+**Continuous Backup** (`continuous: true`):
+- Maintains near real-time backup
+- Continuously captures database mutations
+- Creates periodic snapshots based on `snapshot_interval`
+- Backup runs indefinitely until stopped
+
+### Blob Store URL Parameters
+
+Common optional parameters for blob store URLs:
+
+| Parameter                     | Short | Description                                       |
+| ----------------------------- | ----- | ------------------------------------------------- |
+| `secure_connection`           | `sc`  | Use HTTPS (1=yes, 0=no, default: 1)               |
+| `max_send_bytes_per_second`   | `sbps`| Upload speed limit per agent                      |
+| `max_recv_bytes_per_second`   | `rbps`| Download speed limit per agent                    |
+| `concurrent_requests`         | `cr`  | Max concurrent requests                           |
+| `request_timeout_min`         | `rtom`| Min request timeout in seconds                    |
+
+Example with parameters:
+```yaml
+backup_url: blobstore://key:secret@s3.amazonaws.com/backup?bucket=my-backup&region=us-west-2&sbps=10485760
+```
+
+### Examples
+
+**Minimal Configuration (Recommended for GoBackup Integration):**
+```yaml
+databases:
+  fdb_simple:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+```
+This will backup to GoBackup's dump directory and the backup will be processed by archive/compressor.
+
+**Basic Local Backup:**
+```yaml
+databases:
+  fdb_local:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+    backup_url: file:///backup/fdb/daily
+```
+
+**Continuous S3 Backup:**
+```yaml
+databases:
+  fdb_continuous:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+    tag: continuous
+    continuous: true
+    snapshot_interval: 3600  # 1 hour snapshots
+    backup_url: blobstore://@s3.amazonaws.com/fdb-continuous?bucket=my-backups&region=us-west-2
+    blob_credentials: /etc/foundationdb/blob_credentials.json
+```
+
+**Partial Backup (Specific Key Ranges):**
+```yaml
+databases:
+  fdb_partial:
+    type: foundationdb
+    cluster_file: /etc/foundationdb/fdb.cluster
+    tag: user-data
+    backup_url: file:///backup/fdb/users
+    key_ranges:
+      - "user/ "
+      - "profile/ "
+```
+
+### Notes
+
+- FoundationDB backup requires `fdbbackup` command-line tool to be installed
+- Backup agents (`backup_agent`) must be running on the cluster
+- For blob storage, ensure all backup agents can access the storage endpoint
+- The backup does not delete the target database - restore must be to a cleared database
+- **Backup Completion**: Non-continuous backups use the `-w` flag, which blocks until the backup is complete and restorable
+- Continuous backups run in the background and return immediately after starting
+- Use `fdbbackup status -t <tag>` to check backup progress
+- After backup completes, GoBackup verifies the backup directory exists before proceeding
+
+### Restore
+
+To restore a FoundationDB backup:
+
+```bash
+# Clear the target key ranges first
+fdbcli --exec "clearrange '' \xff"
+
+# Start restore
+fdbrestore start -r file:///backup/fdb/daily -t restore-tag --dest-cluster-file /etc/foundationdb/fdb.cluster -w
+```
+
+See [FoundationDB Backup Documentation](https://apple.github.io/foundationdb/backups.html) for more details.
+
+---
+
 - `xtrabackup` - Percona XtraBackup (x86_64 only)

@@ -1,0 +1,60 @@
+# FoundationDB backup example configuration
+models:
+  my_app:
+    databases:
+      # Minimal configuration (backup_url is optional)
+      # Backup will be stored in GoBackup's dump directory and processed by archive/compressor
+      fdb_minimal:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+
+      # Basic local file backup with explicit backup_url
+      fdb_local:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: daily
+        backup_url: file:///backup/foundationdb/daily
+        continuous: false
+        
+      # Continuous backup
+      fdb_continuous:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: continuous
+        backup_url: file:///backup/foundationdb/continuous
+        continuous: true
+        snapshot_interval: 3600  # 1 hour
+
+      # Backup with key ranges
+      fdb_partial:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: partial
+        backup_url: file:///backup/foundationdb/partial
+        key_ranges:
+          - "users "
+          - "orders "
+
+      # S3 / blob store backup
+      fdb_s3:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: s3-backup
+        backup_url: blobstore://AWS_ACCESS_KEY:AWS_SECRET_KEY@s3.us-west-2.amazonaws.com/fdb-backup?bucket=my-backups&region=us-west-2
+        blob_credentials: /etc/foundationdb/blob_credentials.json
+        
+      # Partitioned log (experimental, for fast restore)
+      fdb_partitioned:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: partitioned
+        backup_url: file:///backup/foundationdb/partitioned
+        partitioned_log: true
+        
+      # With custom args
+      fdb_custom:
+        type: foundationdb
+        cluster_file: /etc/foundationdb/fdb.cluster
+        tag: custom
+        backup_url: file:///backup/foundationdb/custom
+        args: "--initial-snapshot-interval 60"
