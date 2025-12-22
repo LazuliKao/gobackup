@@ -71,6 +71,12 @@ RUN case "$(uname -m)" in \
     mkdir -p /etcd-bin && \
     cp etcd-${ETCD_VER}-linux-${arch}/etcdctl /etcd-bin/etcdctl
 
+# Stage 5.5: Extract mysqlpump from mysql package
+FROM alpine:latest AS mysql-tools-extractor
+RUN apk add --no-cache mysql
+RUN mkdir -p /mysql-bin && \
+    cp /usr/bin/mysqlpump /mysql-bin/mysqlpump
+
 # Stage 6: Build web assets
 FROM node:24-alpine AS web-builder
 WORKDIR /build/web
@@ -164,6 +170,9 @@ COPY --from=influx-downloader /influx-bin/influx /usr/local/bin/influx
 
 # Copy etcdctl
 COPY --from=etcd-downloader /etcd-bin/etcdctl /usr/local/bin/etcdctl
+
+# Copy mysqlpump
+COPY --from=mysql-tools-extractor /mysql-bin/mysqlpump /usr/local/bin/mysqlpump
 
 # Copy gobackup binary from builder stage
 COPY --from=gobackup-builder /build/gobackup /usr/local/bin/gobackup
