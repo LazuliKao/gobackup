@@ -71,6 +71,34 @@ RUN case "$(uname -m)" in \
     mkdir -p /etcd-bin && \
     cp etcd-${ETCD_VER}-linux-${arch}/etcdctl /etcd-bin/etcdctl
 
+# Stage 5.5: Download FoundationDB client tools
+FROM alpine:latest AS foundationdb-downloader
+# https://github.com/apple/foundationdb/releases
+ARG FDB_VERSION="7.3.69"
+RUN apk add --no-cache curl
+RUN mkdir -p /fdb-bin && \
+    case "$(uname -m)" in \
+      x86_64) \
+        cd /fdb-bin && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/fdbbackup.x86_64" && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/fdbcli.x86_64" && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/libfdb_c.x86_64.so" && \
+        mv fdbbackup.x86_64 fdbbackup && \
+        mv fdbcli.x86_64 fdbcli && \
+        mv libfdb_c.x86_64.so libfdb_c.so && \
+        chmod +x fdbbackup fdbcli ;; \
+      aarch64) \
+        cd /fdb-bin && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/fdbbackup.aarch64" && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/fdbcli.aarch64" && \
+        curl -fLO "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/libfdb_c.aarch64.so" && \
+        mv fdbbackup.aarch64 fdbbackup && \
+        mv fdbcli.aarch64 fdbcli && \
+        mv libfdb_c.aarch64.so libfdb_c.so && \
+        chmod +x fdbbackup fdbcli ;; \
+      *) echo 'FoundationDB not available for this architecture, skipping...' ;; \
+    esac
+
 # Stage 6: Build web assets
 FROM node:24-alpine AS web-builder
 WORKDIR /build/web
@@ -164,6 +192,10 @@ COPY --from=influx-downloader /influx-bin/influx /usr/local/bin/influx
 
 # Copy etcdctl
 COPY --from=etcd-downloader /etcd-bin/etcdctl /usr/local/bin/etcdctl
+
+# Copy FoundationDB client tools (if they exist)
+COPY --from=foundationdb-downloader /fdb-bin/* /usr/local/bin/ 2>/dev/null || true
+COPY --from=foundationdb-downloader /fdb-bin/libfdb_c.so /usr/lib/ 2>/dev/null || true
 
 # Copy gobackup binary from builder stage
 COPY --from=gobackup-builder /build/gobackup /usr/local/bin/gobackup
