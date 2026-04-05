@@ -88,24 +88,20 @@ export default function BrowserClient({
     <div className="flex flex-col gap-6">
       {/* Header Section */}
       <div className="flex flex-col gap-4">
-        <Breadcrumb>
-          <BreadcrumbItem>
-            <Button 
-                appearance="transparent"
-                size="small"
-                className="font-normal text-inherit p-0 min-w-0 h-auto"
-                onClick={onBack}
-            >
-               Dashboard
-            </Button>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>Browser</BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <Text weight="semibold" className="uppercase tracking-tight">{modelName}</Text>
-          </BreadcrumbItem>
-        </Breadcrumb>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Button 
+              appearance="transparent"
+              size="small"
+              className="font-normal text-orange-600 hover:text-orange-700 p-0 min-w-0 h-auto"
+              onClick={onBack}
+          >
+             Dashboard
+          </Button>
+          <Icon name="arrow-right-s" className="text-gray-300 text-xs" />
+          <span>Browser</span>
+          <Icon name="arrow-right-s" className="text-gray-300 text-xs" />
+          <Text weight="semibold" className="uppercase tracking-tight text-gray-800">{modelName}</Text>
+        </div>
         
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

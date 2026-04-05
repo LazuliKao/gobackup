@@ -173,8 +173,7 @@ RUN apk add --no-cache \
   # mydumper runtime dependencies
   glib \
   pcre \
-  zlib \
-  mariadb-connector-c
+  zlib
 
 # Copy mydumper from builder stage
 COPY --from=mydumper-builder /usr/local/bin/mydumper /usr/local/bin/mydumper
@@ -193,9 +192,9 @@ COPY --from=influx-downloader /influx-bin/influx /usr/local/bin/influx
 # Copy etcdctl
 COPY --from=etcd-downloader /etcd-bin/etcdctl /usr/local/bin/etcdctl
 
-# Copy FoundationDB client tools (if they exist)
-COPY --from=foundationdb-downloader /fdb-bin/* /usr/local/bin/ 2>/dev/null || true
-COPY --from=foundationdb-downloader /fdb-bin/libfdb_c.so /usr/lib/ 2>/dev/null || true
+# Copy FoundationDB client tools
+COPY --from=foundationdb-downloader /fdb-bin/ /usr/local/bin/
+RUN if [ -f /usr/local/bin/libfdb_c.so ]; then mv /usr/local/bin/libfdb_c.so /usr/lib/; fi
 
 # Copy gobackup binary from builder stage
 COPY --from=gobackup-builder /build/gobackup /usr/local/bin/gobackup
