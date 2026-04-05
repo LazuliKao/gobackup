@@ -4,18 +4,20 @@ FROM alpine:latest AS mydumper-builder
 ARG MYDUMPER_VERSION="0.21.1-1"
 RUN apk add --no-cache \
     curl \
+    ca-certificates \
     cmake \
     make \
     g++ \
     glib-dev \
     pcre-dev \
     zlib-dev \
-    mariadb-dev
+    mariadb-dev && \
+    update-ca-certificates
 RUN cd /tmp && \
     curl -fLO "https://github.com/mydumper/mydumper/archive/refs/tags/v${MYDUMPER_VERSION}.tar.gz" && \
     tar xzf "v${MYDUMPER_VERSION}.tar.gz" && \
     cd "mydumper-${MYDUMPER_VERSION}" && \
-    cmake . && \
+    cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . && \
     make && \
     make install
 
@@ -36,16 +38,17 @@ RUN cd /tmp && \
 
 # Stage 3: Download sqlpackage
 FROM alpine:latest AS sqlpackage-downloader
-RUN apk add --no-cache wget unzip
+RUN apk add --no-cache wget unzip ca-certificates && update-ca-certificates
 WORKDIR /tmp
-RUN wget https://aka.ms/sqlpackage-linux && \
+RUN wget --tries=10 --retry-connrefused --waitretry=2 https://aka.ms/sqlpackage-linux && \
     unzip sqlpackage-linux -d /opt/sqlpackage && \
     chmod +x /opt/sqlpackage/sqlpackage
 
 # Stage 4: Download influx CLI
 FROM alpine:latest AS influx-downloader
 ARG INFLUX_CLI_VERSION=2.7.5
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl ca-certificates && update-ca-certificates
+WORKDIR /tmp
 RUN case "$(uname -m)" in \
       x86_64) arch=amd64 ;; \
       aarch64) arch=arm64 ;; \
@@ -54,13 +57,17 @@ RUN case "$(uname -m)" in \
     curl -fLO "https://dl.influxdata.com/influxdb/releases/influxdb2-client-${INFLUX_CLI_VERSION}-linux-${arch}.tar.gz" && \
     tar xzf "influxdb2-client-${INFLUX_CLI_VERSION}-linux-${arch}.tar.gz" && \
     mkdir -p /influx-bin && \
-    cp influx /influx-bin/influx
+    if [ -f influx ]; then \
+      cp influx /influx-bin/influx; \
+    else \
+      cp influxdb2-client-*/influx /influx-bin/influx; \
+    fi
 
 # Stage 5: Download etcdctl
 FROM alpine:latest AS etcd-downloader
 # https://github.com/etcd-io/etcd/tags
 ARG ETCD_VER="v3.6.6"
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl ca-certificates && update-ca-certificates
 RUN case "$(uname -m)" in \
       x86_64) arch=amd64 ;; \
       aarch64) arch=arm64 ;; \
@@ -75,7 +82,7 @@ RUN case "$(uname -m)" in \
 FROM alpine:latest AS foundationdb-downloader
 # https://github.com/apple/foundationdb/releases
 ARG FDB_VERSION="7.3.69"
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl ca-certificates && update-ca-certificates
 RUN mkdir -p /fdb-bin && \
     case "$(uname -m)" in \
       x86_64) \
@@ -100,25 +107,27 @@ RUN mkdir -p /fdb-bin && \
     esac
 
 # Stage 6: Build web assets
-FROM node:24-alpine AS web-builder
+FROM node:20-alpine AS web-builder
 WORKDIR /build/web
-# Install git (required by some yarn dependencies)
-RUN apk add --no-cache git
+# Install git and certificates
+RUN apk add --no-cache git ca-certificates && update-ca-certificates
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
 # Copy web package files
-COPY web/package.json web/yarn.lock* ./
+COPY web/package.json web/pnpm-lock.yaml* ./
 # Install dependencies
-RUN yarn install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 # Copy web source
 COPY web/ ./
 # Build web assets
-RUN yarn build
+RUN pnpm build
 
 # Stage 7: Build gobackup
-FROM golang:1.25-alpine AS gobackup-builder
+FROM golang:1.24-alpine AS gobackup-builder
 ARG VERSION=dev
 WORKDIR /build
-# Install build dependencies
-RUN apk add --no-cache git
+# Install build dependencies and certificates
+RUN apk add --no-cache git ca-certificates && update-ca-certificates
 # Copy go mod files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download
@@ -128,7 +137,7 @@ COPY . .
 COPY --from=web-builder /build/web/dist ./web/dist
 # Build with optimizations for minimal binary size
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.Version=${VERSION}" \
+    -ldflags="-s -w -X 'main.version=${VERSION}'" \
     -trimpath \
     -o gobackup \
     .
@@ -157,7 +166,6 @@ RUN apk add --no-cache \
   coreutils \
   # there is no pbzip2 yet
   lzip \
-  xz-dev \
   lzop \
   xz \
   # pixz is in edge atm

@@ -3,7 +3,7 @@ test:
 test\:all:
 	@sh tests/test.sh
 build_web:
-	cd web; yarn && yarn build
+	cd web; pnpm install && pnpm build
 perform:
 	@go run main.go -- perform -m demo -c ./gobackup_test.yml
 run:
@@ -13,4 +13,4 @@ start:
 build: build_web
 	go build -o dist/gobackup
 dev:
-	cd web && yarn dev
+	cd web && pnpm dev
