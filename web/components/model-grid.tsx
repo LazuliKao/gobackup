@@ -8,12 +8,14 @@ export interface ModelGridProps {
   models: Record<string, ModelConfig>;
   loading: boolean;
   onBackup: (key: string) => void;
+  onBrowse: (key: string) => void;
 }
 
 export default function ModelGrid({
   models,
   loading,
   onBackup,
+  onBrowse,
 }: ModelGridProps) {
   const modelKeys = Object.keys(models);
 
@@ -50,6 +52,7 @@ export default function ModelGrid({
           modelKey={modelKey}
           model={models[modelKey]}
           onBackup={onBackup}
+          onBrowse={onBrowse}
         />
       ))}
     </div>
