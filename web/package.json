@@ -16,6 +16,7 @@
     "autoprefixer": "^10.4.27",
     "filesize": "^10.0.6",
     "next": "^14.0.0",
+    "playwright": "^1.59.1",
     "postcss": "^8.5.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

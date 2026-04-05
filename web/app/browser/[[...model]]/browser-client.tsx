@@ -65,18 +65,20 @@ const FileItemRow = ({
   const fsize = filesize(file.size || 0, { base: 2 }).toString();
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 py-2 px-2 hover:bg-gray-50">
+    <div className="flex flex-col gap-2 py-2 px-2 hover:bg-gray-50">
       <a
         className="flex items-center space-x-2 hover:text-blue"
         href={downloadURL}
       >
         <Icon name="folder-zip" />
-        <div className="max-w-xl truncate">{file.filename}</div>
+        <div className="truncate">{file.filename}</div>
       </a>
-      <div className="flex items-center justify-between text-sm space-x-4 text-gray-400">
-        <div>{fsize}</div>
-        <div>
-          <Time value={file.last_modified || ''} />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between text-sm space-y-1 md:space-y-0 md:space-x-4 text-gray-400">
+        <div className="flex items-center space-x-4">
+          <div>{fsize}</div>
+          <div>
+            <Time value={file.last_modified || ''} />
+          </div>
         </div>
         <div>
           <Button size="small" title="Download backup file.">
@@ -139,7 +141,7 @@ export default function BrowserClient({ model }: { model?: string[] }) {
           </Button>
         }
       />
-      <div className="file-browser-container">
+      <div className="rounded overflow-y-scroll border border-gray-200 shadow-sm divide-y divide-gray-100 p-2">
         {loading && <Skeleton />}
         {!loading && (
           <>

@@ -2,29 +2,23 @@
 
 import {
   Button,
-  Skeleton,
-  Dialog,
-  DialogTrigger,
-  DialogSurface,
-  DialogTitle,
-  DialogBody,
-  DialogContent,
-  DialogActions,
   useToastController,
   Toast,
   ToastTitle,
   ToastBody,
   Toaster,
+  TabList,
+  Tab,
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { api, ModelConfig } from '@/lib/api';
 import Icon from '@/components/icon';
+import ModelGrid from '@/components/model-grid';
+import LogDialog from '@/components/log-dialog';
 
-const LogView = dynamic(() => import('@/components/log-view'), { ssr: false });
-
-const ModelList = () => {
+export default function Home() {
+  const [selectedTab, setSelectedTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [models, setModels] = useState<Record<string, ModelConfig>>({});
   const { dispatchToast } = useToastController();
@@ -64,94 +58,48 @@ const ModelList = () => {
       });
   };
 
-  const ModelItem = ({ modelKey }: { modelKey: string }) => {
-    const model = models[modelKey];
-    const scheduleEnable = model.schedule?.enabled;
+  return (
+    <div className="flex flex-col gap-4">
+      <TabList
+        selectedValue={selectedTab}
+        onTabSelect={(_, data) => setSelectedTab(data.value as string)}
+      >
+        <Tab value="dashboard">Dashboard</Tab>
+        <Tab value="browser">Browser</Tab>
+      </TabList>
 
-    return (
-      <div className="model-list-item">
-        <div className="text-base">
-          <div className="text-base font-medium uppercase">{modelKey}</div>
-          {scheduleEnable && (
-            <div className="text-green text-sm">{model.schedule_info}</div>
-          )}
-          {model.description && (
-            <div className="text-gray-400 truncate text-xs my-1">
-              {model.description}
+      {selectedTab === 'dashboard' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Icon name="stack" />
+              <div className="text-text text-base font-medium">Models</div>
             </div>
-          )}
-        </div>
-        <div className="flex items-center space-x-1">
-          <Link href={`/browser/${modelKey}`}>
-            <Button size="small">
-              <Icon name="folders" />
-            </Button>
-          </Link>
-
-          <Dialog>
-            <DialogTrigger disableButtonEnhancement>
-              <Button size="small" title="Perform backup now!">
-                <Icon name="play" mode="fill" />
-              </Button>
-            </DialogTrigger>
-            <DialogSurface>
-              <DialogBody>
-                <DialogTitle>Perform Backup</DialogTitle>
-                <DialogContent>
-                  Are you sure to perform backup now?
-                </DialogContent>
-                <DialogActions>
-                  <DialogTrigger disableButtonEnhancement>
-                    <Button appearance="secondary">Cancel</Button>
-                  </DialogTrigger>
-                  <DialogTrigger disableButtonEnhancement>
-                    <Button
-                      appearance="primary"
-                      onClick={() => performBackup(modelKey)}
-                    >
-                      Confirm
-                    </Button>
-                  </DialogTrigger>
-                </DialogActions>
-              </DialogBody>
-            </DialogSurface>
-          </Dialog>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="model-list-wrapper">
-      <div className="model-list-header">
-        <div className="flex items-center space-x-2">
-          <Icon name="stack" />
-          <div className="text-text text-base">Models</div>
-        </div>
-      </div>
-      <div className="model-list-scrollview">
-        {loading && (
-          <div className="p-4">
-            <Skeleton />
+            <LogDialog />
           </div>
-        )}
-        {!loading && (
-          <>
-            {Object.keys(models).map((key: string, idx: number) => (
-              <ModelItem modelKey={key} key={idx} />
-            ))}
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
+          <ModelGrid
+            models={models}
+            loading={loading}
+            onBackup={performBackup}
+          />
+        </div>
+      )}
 
-export default function Home() {
-  return (
-    <div className="flex flex-col relative md:flex-row gap-4">
-      <ModelList />
-      <LogView />
+      {selectedTab === 'browser' && (
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="text-center">
+            <div className="text-gray-400 text-base mb-4">
+              Select a model to browse backup files
+            </div>
+            <Link
+              href="/browser"
+              className="text-blue-500 hover:underline"
+            >
+              Go to Browser
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
