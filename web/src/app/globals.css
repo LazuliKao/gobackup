@@ -16,5 +16,5 @@ body {
 }
 
 .log-wrapper {
-  @apply relative w-full;
+  @apply relative w-full h-full;
 }

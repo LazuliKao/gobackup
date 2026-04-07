@@ -151,14 +151,14 @@ const BrowserClient: FC<BrowserClientProps> = ({
         </Toolbar>
 
         {/* File Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           <Table size="medium">
             <TableHeader className="bg-gray-50">
               <TableRow>
-                <TableHeaderCell>Archive Name</TableHeaderCell>
-                <TableHeaderCell style={{ width: '120px' }}>Size</TableHeaderCell>
-                <TableHeaderCell style={{ width: '180px' }}>Date Modified</TableHeaderCell>
-                <TableHeaderCell style={{ width: '80px' }} className="text-center">Action</TableHeaderCell>
+                <TableHeaderCell className="min-w-[120px] sm:min-w-[200px]">Archive Name</TableHeaderCell>
+                <TableHeaderCell style={{ width: '100px' }} className="hidden sm:table-cell">Size</TableHeaderCell>
+                <TableHeaderCell style={{ width: '150px' }}>Date Modified</TableHeaderCell>
+                <TableHeaderCell style={{ width: '60px' }} className="text-center">Action</TableHeaderCell>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -195,7 +195,7 @@ const BrowserClient: FC<BrowserClientProps> = ({
                           </a>
                         </TableCellLayout>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Text size={200} className="font-mono text-gray-500">
                            {filesize(file.size || 0, { base: 2 }).toString()}
                         </Text>

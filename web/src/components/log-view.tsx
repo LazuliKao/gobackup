@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 
 export default function LogView() {
   return (
-    <div className="log-wrapper">
+    <div className="log-wrapper flex-1">
       <ScrollFollow
         startFollowing
         render={({ follow, onScroll }) => (

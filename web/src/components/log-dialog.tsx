@@ -35,8 +35,8 @@ export default function LogDialog() {
               <span>Backup Execution Logs</span>
             </div>
           </DialogTitle>
-<DialogContent>
-        <div className="min-h-[500px] bg-gray-900 rounded-lg overflow-hidden mt-4">
+<DialogContent className="overflow-hidden min-h-[500px] flex flex-col p-0">
+        <div className="flex-1 bg-gray-900 rounded-lg overflow-hidden mt-4 flex flex-col h-full w-full max-w-full">
           <Suspense fallback={<div className="text-white text-center py-8">Loading...</div>}>
             <LogView />
           </Suspense>
