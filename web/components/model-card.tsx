@@ -14,7 +14,6 @@ import {
   DialogActions,
   Tooltip,
 } from '@fluentui/react-components';
-import Link from 'next/link';
 import { ModelConfig } from '@/lib/api';
 import Icon from '@/components/icon';
 

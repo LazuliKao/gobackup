@@ -1,11 +1,6 @@
 import './globals.css';
 import { ClientLayout } from './client-layout';
 
-export const metadata = {
-  title: 'GoBackup',
-  description: 'Backup management dashboard',
-};
-
 export default function RootLayout({
   children,
 }: {

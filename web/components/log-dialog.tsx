@@ -10,10 +10,10 @@ import {
   Button,
   Tooltip,
 } from '@fluentui/react-components';
-import dynamic from 'next/dynamic';
+import { lazy, Suspense } from 'react';
 import Icon from '@/components/icon';
 
-const LogView = dynamic(() => import('@/components/log-view'), { ssr: false });
+const LogView = lazy(() => import('@/components/log-view'));
 
 export default function LogDialog() {
   return (
@@ -35,11 +35,13 @@ export default function LogDialog() {
               <span>Backup Execution Logs</span>
             </div>
           </DialogTitle>
-          <DialogContent>
-            <div className="min-h-[500px] bg-gray-900 rounded-lg overflow-hidden mt-4">
-              <LogView />
-            </div>
-          </DialogContent>
+<DialogContent>
+        <div className="min-h-[500px] bg-gray-900 rounded-lg overflow-hidden mt-4">
+          <Suspense fallback={<div className="text-white text-center py-8">Loading...</div>}>
+            <LogView />
+          </Suspense>
+        </div>
+      </DialogContent>
         </DialogBody>
       </DialogSurface>
     </Dialog>

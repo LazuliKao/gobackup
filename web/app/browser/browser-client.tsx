@@ -23,18 +23,19 @@ import {
   ToolbarDivider,
 } from '@fluentui/react-components';
 import { filesize } from 'filesize';
-import { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
+import { FC, useEffect, useState, useMemo } from 'react';
 import { api, FileItem } from '../../lib/api';
 import Icon from '@/components/icon';
 
-export default function BrowserClient({ 
+interface BrowserClientProps {
+  model?: string[];
+  onBack?: () => void;
+}
+
+const BrowserClient: FC<BrowserClientProps> = ({ 
   model, 
   onBack 
-}: { 
-  model?: string[]; 
-  onBack?: () => void;
-}) {
+}) => {
   const modelName = model?.[0] || '';
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -77,9 +78,9 @@ export default function BrowserClient({
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center gap-4">
         <Icon name="error-warning" className="text-4xl text-gray-300" />
         <Title2>No Model Specified</Title2>
-        <Link href="/">
+        <a href="/">
           <Button appearance="primary">Return to Dashboard</Button>
-        </Link>
+        </a>
       </div>
     );
   }
@@ -185,13 +186,13 @@ export default function BrowserClient({
                         <TableCellLayout
                           media={<Icon name="file-zip" className="text-orange-500" />}
                         >
-                          <Link 
+                          <a 
                             href={downloadURL} 
                             target="_blank"
                             className="no-underline hover:text-orange-600 transition-colors font-medium break-all"
                           >
                             {file.filename}
-                          </Link>
+                          </a>
                         </TableCellLayout>
                       </TableCell>
                       <TableCell>
@@ -227,7 +228,9 @@ export default function BrowserClient({
          <Caption1 className="text-gray-400 italic">
             GoBackup provides secure retrieval for all your backup archives.
          </Caption1>
-      </div>
-    </div>
-  );
-}
+       </div>
+     </div>
+   );
+};
+
+export default BrowserClient;

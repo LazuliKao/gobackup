@@ -9,8 +9,7 @@ import {
   TabList,
   Tab,
 } from '@fluentui/react-components';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState, ReactNode } from 'react';
 import { api, ModelConfig } from '@/lib/api';
 import Icon from '@/components/icon';
 import ModelGrid from '@/components/model-grid';
@@ -35,7 +34,7 @@ export default function Home() {
           <Toast>
             <ToastTitle>Backup Started</ToastTitle>
             <ToastBody>Backup for <strong>{model}</strong> is performing in the background.</ToastBody>
-          </Toast>,
+          </Toast> as ReactNode,
           { intent: 'success' }
         );
       })
@@ -44,7 +43,7 @@ export default function Home() {
           <Toast>
             <ToastTitle>Backup Failed</ToastTitle>
             <ToastBody>{data.message || 'Unknown error occurred'}</ToastBody>
-          </Toast>,
+          </Toast> as ReactNode,
           { intent: 'error' }
         );
       });

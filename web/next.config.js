@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  distDir: 'dist',
   reactStrictMode: false,
   images: {
     unoptimized: true,
@@ -10,17 +9,18 @@ const nextConfig = {
     tsconfigPath: './tsconfig.json',
   },
   transpilePackages: ["@fluentui/react-components"],
-  async rewrites() {
-    return {
-      beforeFiles: [
-        {
-          source: '/api/:path*',
-          destination: 'http://localhost:2703/api/:path*',
-        },
-      ],
-    };
-  },
+  ...(process.env.NODE_ENV === 'development' ? {
+    async rewrites() {
+      return {
+        beforeFiles: [
+          {
+            source: '/api/:path*',
+            destination: 'http://localhost:2703/api/:path*',
+          },
+        ],
+      };
+    }
+  } : {})
 };
 
 export default nextConfig;
-

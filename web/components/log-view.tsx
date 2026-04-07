@@ -1,5 +1,3 @@
-'use client';
-
 import { LazyLog, ScrollFollow } from 'react-lazylog';
 import { api } from '@/lib/api';
 
