@@ -4,19 +4,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	"github.com/gobackup/gobackup/helper"
 	"github.com/gobackup/gobackup/logger"
 )
 
 var (
+	missingPropertiesPattern = regexp.MustCompile(`missing properties?: (.+)$`)
+	typeErrorPattern         = regexp.MustCompile(`expected ([^,]+), but got ([^\s]+)`)
+
 	// Exist Is config file exist
 	Exist bool
 	// Models configs
@@ -158,6 +165,135 @@ func onConfigChanged(in fsnotify.Event) {
 	}
 }
 
+func validateConfig(schemaPath string, configData []byte) error {
+	compiler := jsonschema.NewCompiler()
+	schema, err := compiler.Compile(schemaPath)
+	if err != nil {
+		return err
+	}
+
+	var data interface{}
+	if err := yaml.Unmarshal(configData, &data); err != nil {
+		return err
+	}
+
+	if err := schema.Validate(data); err != nil {
+		if validationErr, ok := err.(*jsonschema.ValidationError); ok {
+			return formatValidationError(validationErr)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func formatValidationError(err *jsonschema.ValidationError) error {
+	validationErrors := flattenValidationErrors(err)
+	if len(validationErrors) == 0 {
+		validationErrors = []*jsonschema.ValidationError{err}
+	}
+
+	formattedErrors := make([]string, 0, len(validationErrors))
+	for _, validationErr := range validationErrors {
+		formattedErrors = append(formattedErrors, formatSingleValidationError(validationErr))
+	}
+
+	sort.Strings(formattedErrors)
+
+	return fmt.Errorf("Configuration validation failed:\n- %s", strings.Join(formattedErrors, "\n- "))
+}
+
+func flattenValidationErrors(err *jsonschema.ValidationError) []*jsonschema.ValidationError {
+	if err == nil {
+		return nil
+	}
+
+	if len(err.Causes) == 0 {
+		return []*jsonschema.ValidationError{err}
+	}
+
+	var result []*jsonschema.ValidationError
+	for _, cause := range err.Causes {
+		result = append(result, flattenValidationErrors(cause)...)
+	}
+
+	return result
+}
+
+func formatSingleValidationError(err *jsonschema.ValidationError) string {
+	path := jsonPointerToFieldPath(err.InstanceLocation)
+	message := strings.TrimSpace(err.Message)
+
+	if requiredField := missingRequiredField(message); requiredField != "" {
+		path = joinFieldPath(path, requiredField)
+		message = "field is required"
+	} else if expectedType, actualType, ok := parseTypeError(message); ok {
+		message = fmt.Sprintf("Invalid type. Expected: %s, got: %s", expectedType, actualType)
+	}
+
+	if path == "" {
+		return message
+	}
+
+	return fmt.Sprintf("%s: %s", path, message)
+}
+
+func missingRequiredField(message string) string {
+	matches := missingPropertiesPattern.FindStringSubmatch(message)
+	if len(matches) != 2 {
+		return ""
+	}
+
+	field := strings.TrimSpace(matches[1])
+	field = strings.Trim(field, "'\"")
+	field = strings.TrimSuffix(field, ",")
+
+	if idx := strings.Index(field, ","); idx >= 0 {
+		field = field[:idx]
+	}
+	if idx := strings.Index(field, " or "); idx >= 0 {
+		field = field[:idx]
+	}
+
+	return strings.TrimSpace(strings.Trim(field, "'\""))
+}
+
+func parseTypeError(message string) (string, string, bool) {
+	matches := typeErrorPattern.FindStringSubmatch(message)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+
+	return strings.TrimSpace(matches[1]), strings.TrimSpace(matches[2]), true
+}
+
+func jsonPointerToFieldPath(pointer string) string {
+	if pointer == "" || pointer == "/" {
+		return ""
+	}
+
+	parts := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
+	for i, part := range parts {
+		part = strings.ReplaceAll(part, "~1", "/")
+		part = strings.ReplaceAll(part, "~0", "~")
+		parts[i] = part
+	}
+
+	return strings.Join(parts, ".")
+}
+
+func joinFieldPath(base string, part string) string {
+	if base == "" {
+		return part
+	}
+	if part == "" {
+		return base
+	}
+
+	return base + "." + part
+}
+
 func loadConfig() error {
 	wLock.Lock()
 	defer wLock.Unlock()
@@ -190,7 +326,21 @@ func loadConfig() error {
 	}
 
 	cfg, _ := os.ReadFile(viperConfigFile)
-	if err := viper.ReadConfig(strings.NewReader(os.ExpandEnv(string(cfg)))); err != nil {
+	expandedCfg := []byte(os.ExpandEnv(string(cfg)))
+	schemaPath := filepath.Join(filepath.Dir(viperConfigFile), "schema.json")
+	if _, err := os.Stat(schemaPath); err != nil {
+		schemaPath = filepath.Join(GoBackupDir, "config", "schema.json")
+		if _, err := os.Stat(schemaPath); err != nil {
+			schemaPath = filepath.Join("config", "schema.json")
+		}
+	}
+
+	if err := validateConfig(schemaPath, expandedCfg); err != nil {
+		logger.Errorf("Validate config failed: %v", err)
+		return err
+	}
+
+	if err := viper.ReadConfig(strings.NewReader(string(expandedCfg))); err != nil {
 		logger.Errorf("Load expanded config failed: %v", err)
 		return err
 	}
