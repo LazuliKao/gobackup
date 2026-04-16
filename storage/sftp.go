@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"io"
+	"mime"
 	"os"
 	"os/user"
 	"path"
@@ -180,6 +181,25 @@ func (s *SFTP) list(parent string) ([]FileItem, error) {
 	return items, nil
 }
 
-func (s *SFTP) download(fileKey string) (string, error) {
-	return "", fmt.Errorf("SFTP not support download")
+func (s *SFTP) download(fileKey string) (*DownloadResult, error) {
+	remotePath := path.Join(s.path, fileKey)
+	remoteFile, err := s.client.Open(remotePath)
+	if err != nil {
+		return nil, err
+	}
+
+	fileInfo, err := remoteFile.Stat()
+	if err != nil {
+		remoteFile.Close()
+		return nil, err
+	}
+
+	filename := path.Base(fileKey)
+	return &DownloadResult{
+		Reader:      remoteFile,
+		Filename:    filename,
+		Size:        fileInfo.Size(),
+		ContentType: mime.TypeByExtension(path.Ext(filename)),
+		cleanup:     remoteFile.Close,
+	}, nil
 }

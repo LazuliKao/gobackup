@@ -197,6 +197,6 @@ func (s *FTP) list(parent string) ([]FileItem, error) {
 }
 
 // Get FTP download URL
-func (s *FTP) download(fileKey string) (string, error) {
-	return "", fmt.Errorf("FTP download is not supported")
+func (s *FTP) download(fileKey string) (*DownloadResult, error) {
+	return nil, fmt.Errorf("FTP download is not supported")
 }

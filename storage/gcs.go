@@ -168,8 +168,13 @@ func (s *GCS) list(parent string) ([]FileItem, error) {
 }
 
 // Generate a sign URL for download
-func (s *GCS) download(fileKey string) (string, error) {
-	return s.client.Bucket(s.bucket).SignedURL(fileKey, &storage.SignedURLOptions{
+func (s *GCS) download(fileKey string) (*DownloadResult, error) {
+	url, err := s.client.Bucket(s.bucket).SignedURL(fileKey, &storage.SignedURLOptions{
 		Expires: time.Now().Add(time.Hour * 1),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &DownloadResult{RedirectURL: url}, nil
 }

@@ -383,7 +383,7 @@ func (s *S3) list(parent string) ([]FileItem, error) {
 }
 
 // Get the object download URL by fileKey (include remote_path)
-func (s *S3) download(fileKey string) (string, error) {
+func (s *S3) download(fileKey string) (*DownloadResult, error) {
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(fileKey),
@@ -392,8 +392,8 @@ func (s *S3) download(fileKey string) (string, error) {
 	req, _ := s.client.S3.GetObjectRequest(input)
 	url, err := req.Presign(1 * time.Hour)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign request, %v", err)
+		return nil, fmt.Errorf("failed to sign request, %v", err)
 	}
 
-	return url, nil
+	return &DownloadResult{RedirectURL: url}, nil
 }

@@ -166,9 +166,14 @@ func (s *Azure) list(parent string) ([]FileItem, error) {
 }
 
 // Get a client download URL
-func (s *Azure) download(fileKey string) (string, error) {
+func (s *Azure) download(fileKey string) (*DownloadResult, error) {
 	containerClient := s.client.ServiceClient().NewContainerClient(s.container)
 	blobClient := containerClient.NewBlobClient(fileKey)
 
-	return blobClient.GetSASURL(sas.BlobPermissions{Read: true}, time.Now(), time.Now().Add(time.Hour*1))
+	url, err := blobClient.GetSASURL(sas.BlobPermissions{Read: true}, time.Now(), time.Now().Add(time.Hour*1))
+	if err != nil {
+		return nil, err
+	}
+
+	return &DownloadResult{RedirectURL: url}, nil
 }

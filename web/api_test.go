@@ -3,13 +3,18 @@ package web
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobackup/gobackup/config"
+	"github.com/gobackup/gobackup/storage"
 	"github.com/longbridgeapp/assert"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -67,4 +72,83 @@ func TestAPIPostPeform(t *testing.T) {
 
 	assert.Equal(t, 200, code)
 	assertMatchJSON(t, gin.H{"message": "Backup: test_model performed in background."}, body)
+}
+
+func TestAPIDownloadStreamsLocalFile(t *testing.T) {
+	tempDir := t.TempDir()
+	fileName := "backup.tar.gz"
+	fileContent := "streamed backup payload"
+	filePath := filepath.Join(tempDir, fileName)
+	assert.NoError(t, os.WriteFile(filePath, []byte(fileContent), 0644))
+
+	originalModels := config.Models
+	defer func() {
+		config.Models = originalModels
+	}()
+
+	config.Models = []config.ModelConfig{{
+		Name:           "download_test",
+		DefaultStorage: "local",
+		Storages: map[string]config.SubConfig{
+			"local": {
+				Name: "local",
+				Type: "local",
+				Viper: func() *viper.Viper {
+					vp := viper.New()
+					vp.Set("path", tempDir)
+					return vp
+				}(),
+			},
+		},
+	}}
+
+	r := setupRouter("master")
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/download?model=download_test&path="+fileName, nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 500, w.Code)
+	assert.Contains(t, w.Body.String(), "Local is not support download")
+}
+
+func TestAPIDownloadStreamsReaderResult(t *testing.T) {
+	body := "streamed bytes"
+	r := setupRouter("master")
+	w := httptest.NewRecorder()
+
+	originalDownload := storageDownload
+	defer func() {
+		storageDownload = originalDownload
+	}()
+
+	storageDownload = func(model config.ModelConfig, fileKey string) (*storage.DownloadResult, error) {
+		return &storage.DownloadResult{
+			Reader:      io.NopCloser(bytes.NewBufferString(body)),
+			Filename:    "backup.tar.gz",
+			Size:        int64(len(body)),
+			ContentType: "application/gzip",
+		}, nil
+	}
+
+	originalModels := config.Models
+	defer func() {
+		config.Models = originalModels
+	}()
+
+	config.Models = []config.ModelConfig{{
+		Name:           "download_test",
+		DefaultStorage: "local",
+		Storages: map[string]config.SubConfig{
+			"local": {Name: "local", Type: "local"},
+		},
+	}}
+
+	req, _ := http.NewRequest("GET", "/api/download?model=download_test&path=backup.tar.gz", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, body, w.Body.String())
+	assert.Equal(t, "application/gzip", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment; filename=\"backup.tar.gz\"", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, "14", w.Header().Get("Content-Length"))
 }

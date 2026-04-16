@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,6 +30,25 @@ type FileItem struct {
 	LastModified time.Time `json:"last_modified,omitempty"`
 }
 
+type DownloadResult struct {
+	RedirectURL string
+	Reader      io.ReadCloser
+	Filename    string
+	Size        int64
+	ContentType string
+	cleanup     func() error
+}
+
+func (r *DownloadResult) Close() error {
+	if r == nil || r.cleanup == nil {
+		return nil
+	}
+
+	err := r.cleanup()
+	r.cleanup = nil
+	return err
+}
+
 // Storage interface
 type Storage interface {
 	open() error
@@ -36,7 +56,7 @@ type Storage interface {
 	upload(fileKey string) error
 	delete(fileKey string) error
 	list(parent string) ([]FileItem, error)
-	download(fileKey string) (string, error)
+	download(fileKey string) (*DownloadResult, error)
 }
 
 func newBase(model config.ModelConfig, archivePath string, storageConfig config.SubConfig) (base Base, err error) {
@@ -215,17 +235,45 @@ func List(model config.ModelConfig, parent string) (items []FileItem, err error)
 	return []FileItem{}, fmt.Errorf("Storage %s not found", model.DefaultStorage)
 }
 
-func Download(model config.ModelConfig, fileKey string) (string, error) {
+func Download(model config.ModelConfig, fileKey string) (*DownloadResult, error) {
 	if storageConfig, ok := model.Storages[model.DefaultStorage]; ok {
 		_, s := new(model, "", storageConfig)
 		err := s.open()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		defer s.close()
 
-		return s.download(fileKey)
+		result, err := s.download(fileKey)
+		if err != nil {
+			s.close()
+			return nil, err
+		}
+
+		if result == nil {
+			s.close()
+			return nil, fmt.Errorf("empty download result")
+		}
+
+		if result.Reader == nil {
+			s.close()
+			return result, nil
+		}
+
+		existingCleanup := result.cleanup
+		result.cleanup = func() error {
+			var cleanupErr error
+			if existingCleanup != nil {
+				if err := existingCleanup(); err != nil {
+					cleanupErr = err
+				}
+			}
+
+			s.close()
+			return cleanupErr
+		}
+
+		return result, nil
 	}
 
-	return "", fmt.Errorf("Storage %s not found", model.DefaultStorage)
+	return nil, fmt.Errorf("Storage %s not found", model.DefaultStorage)
 }

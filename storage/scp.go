@@ -273,6 +273,6 @@ func (s *SCP) list(parent string) ([]FileItem, error) {
 	return nil, fmt.Errorf("SCP not support list")
 }
 
-func (s *SCP) download(fileKey string) (string, error) {
-	return "", fmt.Errorf("SCP not support download")
+func (s *SCP) download(fileKey string) (*DownloadResult, error) {
+	return nil, fmt.Errorf("SCP not support download")
 }

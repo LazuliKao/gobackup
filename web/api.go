@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"time"
 
 	"github.com/gin-contrib/static"
@@ -22,6 +24,7 @@ import (
 //go:embed dist
 var staticFS embed.FS
 var logFile *os.File
+var storageDownload = storage.Download
 
 type embedFileSystem struct {
 	http.FileSystem
@@ -201,13 +204,51 @@ func download(c *gin.Context) {
 		return
 	}
 
-	downloadURL, err := storage.Download(m.Config, file)
-	if err != nil || len(downloadURL) == 0 {
+	downloadResult, err := storageDownload(m.Config, file)
+	if err != nil || downloadResult == nil {
 		c.AbortWithError(500, err)
 		return
 	}
 
-	c.Redirect(302, downloadURL)
+	defer func() {
+		if err := downloadResult.Close(); err != nil {
+			logger.Errorf("Failed to close download result: %v", err)
+		}
+	}()
+
+	if len(downloadResult.RedirectURL) > 0 {
+		c.Redirect(302, downloadResult.RedirectURL)
+		return
+	}
+
+	if downloadResult.Reader == nil {
+		c.AbortWithError(500, fmt.Errorf("download is not available for file: %s", file))
+		return
+	}
+
+	filename := downloadResult.Filename
+	if filename == "" {
+		filename = path.Base(file)
+	}
+
+	contentType := downloadResult.ContentType
+	if contentType == "" {
+		contentType = mime.TypeByExtension(path.Ext(filename))
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	if downloadResult.Size > 0 {
+		c.Header("Content-Length", fmt.Sprintf("%d", downloadResult.Size))
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	c.Status(http.StatusOK)
+
+	if _, err := io.Copy(c.Writer, downloadResult.Reader); err != nil {
+		logger.Errorf("Failed to stream download %s: %v", file, err)
+	}
 }
 
 // GET /api/log

@@ -130,6 +130,6 @@ func (s *WebDAV) list(parent string) ([]FileItem, error) {
 	return items, nil
 }
 
-func (s *WebDAV) download(fileKey string) (string, error) {
-	return "", fmt.Errorf("WebDAV not support download")
+func (s *WebDAV) download(fileKey string) (*DownloadResult, error) {
+	return nil, fmt.Errorf("WebDAV not support download")
 }
