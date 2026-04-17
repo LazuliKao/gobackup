@@ -27,10 +27,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": [
-        "./*",
-        "app/*",
-        "lib/*",
-        "components/*"
+        "src/*"
       ]
     },
     "plugins": [
@@ -40,14 +37,11 @@
     ]
   },
   "include": [
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "lib/**/*.ts",
-    "components/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "src/**/*"
+    "node_modules"
   ]
 }

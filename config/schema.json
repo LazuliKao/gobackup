@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gobackup.github.io/schema/config.schema.json",
+  "$ref": "#/$defs/ConfigSchema",
+  "$defs": {
+    "CompressSubConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Sub-configuration name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "tar",
+            "tgz",
+            "7z"
+          ],
+          "title": "Type",
+          "description": "Compression type"
+        }
+      },
+      "type": "object"
+    },
+    "ConfigSchema": {
+      "properties": {
+        "workdir": {
+          "type": "string",
+          "title": "WorkDir",
+          "description": "Base working directory for temporary backup files."
+        },
+        "web": {
+          "$ref": "#/$defs/WebConfig",
+          "title": "WebConfig",
+          "description": "Web UI and API server configuration."
+        },
+        "models": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelConfig"
+          },
+          "type": "object",
+          "title": "Models",
+          "description": "Backup models keyed by model name."
+        }
+      },
+      "type": "object"
+    },
+    "DatabaseSubConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Sub-configuration name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "mysql",
+            "postgresql",
+            "redis",
+            "mongodb",
+            "sqlite",
+            "mssql",
+            "influxdb",
+            "mariadb",
+            "etcd",
+            "firebird",
+            "foundationdb"
+          ],
+          "title": "Type",
+          "description": "Database type"
+        }
+      },
+      "type": "object"
+    },
+    "EncryptSubConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Sub-configuration name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "openssl"
+          ],
+          "title": "Type",
+          "description": "Encryption type"
+        }
+      },
+      "type": "object"
+    },
+    "ModelConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Model name."
+        },
+        "description": {
+          "type": "string",
+          "title": "Description",
+          "description": "Human readable description for the backup model."
+        },
+        "schedule": {
+          "$ref": "#/$defs/ScheduleConfig",
+          "title": "Schedule",
+          "description": "Backup schedule configuration."
+        },
+        "compress_with": {
+          "$ref": "#/$defs/CompressSubConfig",
+          "title": "CompressWith",
+          "description": "Compression configuration."
+        },
+        "encrypt_with": {
+          "$ref": "#/$defs/EncryptSubConfig",
+          "title": "EncryptWith",
+          "description": "Encryption configuration."
+        },
+        "archive": {
+          "type": "object",
+          "title": "Archive",
+          "description": "Archive configuration."
+        },
+        "split_with": {
+          "type": "object",
+          "title": "Splitter",
+          "description": "Split output configuration."
+        },
+        "databases": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DatabaseSubConfig"
+          },
+          "type": "object",
+          "title": "Databases",
+          "description": "Database sources keyed by name."
+        },
+        "storages": {
+          "additionalProperties": {
+            "$ref": "#/$defs/StorageSubConfig"
+          },
+          "type": "object",
+          "title": "Storages",
+          "description": "Storage destinations keyed by name."
+        },
+        "default_storage": {
+          "type": "string",
+          "title": "DefaultStorage",
+          "description": "Default storage name."
+        },
+        "notifiers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/NotifierSubConfig"
+          },
+          "type": "object",
+          "title": "Notifiers",
+          "description": "Notification providers keyed by name."
+        },
+        "before_script": {
+          "type": "string",
+          "title": "BeforeScript",
+          "description": "Script executed before backup."
+        },
+        "after_script": {
+          "type": "string",
+          "title": "AfterScript",
+          "description": "Script executed after backup."
+        }
+      },
+      "type": "object"
+    },
+    "NotifierSubConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Sub-configuration name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "mail",
+            "webhook",
+            "discord",
+            "slack",
+            "feishu",
+            "dingtalk",
+            "github",
+            "telegram",
+            "ses",
+            "postmark",
+            "sendgrid",
+            "resend",
+            "healthchecks",
+            "wxwork",
+            "googlechat"
+          ],
+          "title": "Type",
+          "description": "Notifier type"
+        }
+      },
+      "type": "object"
+    },
+    "ScheduleConfig": {
+      "properties": {
+        "cron": {
+          "type": "string",
+          "title": "Cron",
+          "description": "Cron expression for scheduled backups."
+        },
+        "every": {
+          "type": "string",
+          "title": "Every",
+          "description": "Interval expression such as 1day or 12h."
+        },
+        "at": {
+          "type": "string",
+          "title": "At",
+          "description": "Time of day used together with every."
+        }
+      },
+      "type": "object"
+    },
+    "StorageSubConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "Sub-configuration name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "local",
+            "ftp",
+            "sftp",
+            "scp",
+            "s3",
+            "oss",
+            "gcs",
+            "azure",
+            "b2",
+            "r2",
+            "spaces",
+            "cos",
+            "us3",
+            "kodo",
+            "bos",
+            "minio",
+            "obs",
+            "tos",
+            "upyun",
+            "webdav"
+          ],
+          "title": "Type",
+          "description": "Storage type"
+        }
+      },
+      "type": "object"
+    },
+    "WebConfig": {
+      "properties": {
+        "host": {
+          "type": "string",
+          "title": "Host",
+          "description": "Web server bind host."
+        },
+        "port": {
+          "type": "string",
+          "title": "Port",
+          "description": "Web server port."
+        },
+        "username": {
+          "type": "string",
+          "title": "Username",
+          "description": "Web UI username."
+        },
+        "password": {
+          "type": "string",
+          "title": "Password",
+          "description": "Web UI password."
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "GoBackup Config Schema"
+}

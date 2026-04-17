@@ -60,6 +60,11 @@ type ScheduleConfig struct {
 	At string `json:"at,omitempty"`
 }
 
+type runtimeValidationState struct {
+	models []ModelConfig
+	web    WebConfig
+}
+
 func (sc ScheduleConfig) String() string {
 	if sc.Enabled {
 		if len(sc.Cron) > 0 {
@@ -104,6 +109,72 @@ func getGoBackupDir() string {
 		dir = filepath.Join(os.Getenv("HOME"), ".gobackup")
 	}
 	return dir
+}
+
+func homeDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = os.Getenv("HOME")
+	}
+
+	return homeDir
+}
+
+func normalizeConfigPath(configFilePath string) string {
+	if strings.TrimSpace(configFilePath) == "" {
+		return ""
+	}
+
+	return helper.AbsolutePath(configFilePath)
+}
+
+// KnownConfigFilePaths returns the allowed config file locations.
+func KnownConfigFilePaths() []string {
+	paths := []string{
+		normalizeConfigPath(filepath.Join(".", "gobackup.yml")),
+		normalizeConfigPath(filepath.Join(homeDir(), ".gobackup", "gobackup.yml")),
+		normalizeConfigPath(filepath.Join("/etc", "gobackup", "gobackup.yml")),
+	}
+
+	if currentPath := CurrentConfigFilePath(); currentPath != "" {
+		paths = append([]string{currentPath}, paths...)
+	}
+
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(paths))
+	for _, candidate := range paths {
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		result = append(result, candidate)
+	}
+
+	return result
+}
+
+// CurrentConfigFilePath returns the active config file path, if loaded.
+func CurrentConfigFilePath() string {
+	return normalizeConfigPath(viper.ConfigFileUsed())
+}
+
+// ResolveKnownConfigFilePath normalizes and validates a config path against the allowlist.
+func ResolveKnownConfigFilePath(configFilePath string) (string, bool) {
+	normalizedPath := normalizeConfigPath(configFilePath)
+	if normalizedPath == "" {
+		return "", false
+	}
+
+	for _, candidate := range KnownConfigFilePaths() {
+		if candidate == normalizedPath {
+			return candidate, true
+		}
+	}
+
+	return "", false
 }
 
 // SubConfig sub config info
@@ -294,6 +365,144 @@ func joinFieldPath(base string, part string) string {
 	return base + "." + part
 }
 
+func findSchemaPath(configFilePath string) string {
+	searchPaths := []string{
+		filepath.Join(filepath.Dir(configFilePath), "schema.json"),
+		filepath.Join(GoBackupDir, "config", "schema.json"),
+		filepath.Join(filepath.Dir(os.Args[0]), "config", "schema.json"),
+		"/etc/gobackup/schema.json",
+	}
+
+	if cwd, err := os.Getwd(); err == nil {
+		searchPaths = append(searchPaths, filepath.Join(cwd, "config", "schema.json"))
+	}
+
+	for _, p := range searchPaths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	return ""
+}
+
+func expandConfigContent(configFilePath string, configData []byte) ([]byte, error) {
+	envValues := map[string]string{}
+	for _, env := range os.Environ() {
+		key, value, found := strings.Cut(env, "=")
+		if !found {
+			continue
+		}
+		envValues[key] = value
+	}
+
+	dotEnv := filepath.Join(filepath.Dir(configFilePath), ".env")
+	if _, err := os.Stat(dotEnv); err == nil {
+		dotEnvValues, err := godotenv.Read(dotEnv)
+		if err != nil {
+			return nil, err
+		}
+
+		for key, value := range dotEnvValues {
+			if _, exists := envValues[key]; exists {
+				continue
+			}
+			envValues[key] = value
+		}
+	}
+
+	expanded := os.Expand(string(configData), func(key string) string {
+		return envValues[key]
+	})
+
+	return []byte(expanded), nil
+}
+
+func parseRuntimeConfig(expandedCfg []byte, cleanupTempWorkDir bool) (_ *viper.Viper, _ *runtimeValidationState, err error) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+
+	if err := v.ReadConfig(strings.NewReader(string(expandedCfg))); err != nil {
+		return nil, nil, err
+	}
+
+	v.Set("useTempWorkDir", false)
+	tempWorkDir := ""
+	if workdir := v.GetString("workdir"); len(workdir) == 0 {
+		dir, err := os.MkdirTemp("", "gobackup")
+		if err != nil {
+			return nil, nil, err
+		}
+
+		v.Set("workdir", dir)
+		v.Set("useTempWorkDir", true)
+		tempWorkDir = dir
+	}
+
+	if cleanupTempWorkDir && tempWorkDir != "" {
+		defer func() {
+			if removeErr := os.RemoveAll(tempWorkDir); removeErr != nil && err == nil {
+				err = removeErr
+			}
+		}()
+	}
+
+	state := &runtimeValidationState{
+		models: []ModelConfig{},
+		web:    WebConfig{},
+	}
+
+	for key := range v.GetStringMap("models") {
+		model, err := loadModelFromViper(v, key)
+		if err != nil {
+			return nil, nil, fmt.Errorf("load model %s: %v", key, err)
+		}
+
+		state.models = append(state.models, model)
+	}
+
+	if len(state.models) == 0 {
+		return nil, nil, fmt.Errorf("no model found")
+	}
+
+	v.SetDefault("web.host", "0.0.0.0")
+	v.SetDefault("web.port", 2703)
+	state.web.Host = v.GetString("web.host")
+	state.web.Port = v.GetString("web.port")
+	state.web.Username = v.GetString("web.username")
+	state.web.Password = v.GetString("web.password")
+
+	return v, state, nil
+}
+
+func ValidateRuntimeConfig(configFilePath string, configData []byte) error {
+	expandedCfg, err := expandConfigContent(configFilePath, configData)
+	if err != nil {
+		return err
+	}
+
+	schemaPath := findSchemaPath(configFilePath)
+	if schemaPath != "" {
+		if err := validateConfig(schemaPath, expandedCfg); err != nil {
+			return err
+		}
+	}
+
+	_, state, err := parseRuntimeConfig(expandedCfg, true)
+	if err != nil {
+		if err.Error() == "no model found" {
+			return fmt.Errorf("no model found in %s", configFilePath)
+		}
+		return err
+	}
+
+	if state == nil || len(state.models) == 0 {
+		return fmt.Errorf("no model found in %s", configFilePath)
+	}
+
+	return nil
+}
+
 func loadConfig() error {
 	wLock.Lock()
 	defer wLock.Unlock()
@@ -316,23 +525,18 @@ func loadConfig() error {
 
 	logger.Info("Config file:", viperConfigFile)
 
-	// load .env if exists in the same directory of used config file and expand variables in the config
-	dotEnv := filepath.Join(filepath.Dir(viperConfigFile), ".env")
-	if _, err := os.Stat(dotEnv); err == nil {
-		if err := godotenv.Load(dotEnv); err != nil {
-			logger.Errorf("Load %s failed: %v", dotEnv, err)
-			return err
-		}
+	cfg, _ := os.ReadFile(viperConfigFile)
+	expandedCfg, err := expandConfigContent(viperConfigFile, cfg)
+	if err != nil {
+		logger.Errorf("Expand config failed: %v", err)
+		return err
 	}
 
-	cfg, _ := os.ReadFile(viperConfigFile)
-	expandedCfg := []byte(os.ExpandEnv(string(cfg)))
-	schemaPath := filepath.Join(filepath.Dir(viperConfigFile), "schema.json")
-	if _, err := os.Stat(schemaPath); err != nil {
-		schemaPath = filepath.Join(GoBackupDir, "config", "schema.json")
-		if _, err := os.Stat(schemaPath); err != nil {
-			schemaPath = filepath.Join("config", "schema.json")
-		}
+	schemaPath := findSchemaPath(viperConfigFile)
+	if schemaPath == "" {
+		// Schema validation is optional - skip if not found
+		logger.Warn("Schema file not found, skipping validation")
+		goto skipValidation
 	}
 
 	if err := validateConfig(schemaPath, expandedCfg); err != nil {
@@ -340,47 +544,30 @@ func loadConfig() error {
 		return err
 	}
 
-	if err := viper.ReadConfig(strings.NewReader(string(expandedCfg))); err != nil {
+skipValidation:
+
+	validatedViper, state, err := parseRuntimeConfig(expandedCfg, false)
+	if err != nil {
 		logger.Errorf("Load expanded config failed: %v", err)
+		if err.Error() == "no model found" {
+			return fmt.Errorf("no model found in %s", viperConfigFile)
+		}
 		return err
 	}
 
-	// TODO: Here the `useTempWorkDir` and `workdir`, is not in config document. We need removed it.
-	viper.Set("useTempWorkDir", false)
-	if workdir := viper.GetString("workdir"); len(workdir) == 0 {
-		// use temp dir as workdir
-		dir, err := os.MkdirTemp("", "gobackup")
-		if err != nil {
-			return err
-		}
+	viper.SetConfigType("yaml")
+	if err := viper.ReadConfig(strings.NewReader(string(expandedCfg))); err != nil {
+		logger.Errorf("Refresh global config failed: %v", err)
+		return err
+	}
 
-		viper.Set("workdir", dir)
-		viper.Set("useTempWorkDir", true)
+	for key, value := range validatedViper.AllSettings() {
+		viper.Set(key, value)
 	}
 
 	Exist = true
-	Models = []ModelConfig{}
-	for key := range viper.GetStringMap("models") {
-		model, err := loadModel(key)
-		if err != nil {
-			return fmt.Errorf("load model %s: %v", key, err)
-		}
-
-		Models = append(Models, model)
-	}
-
-	if len(Models) == 0 {
-		return fmt.Errorf("no model found in %s", viperConfigFile)
-	}
-
-	// Load web config
-	Web = WebConfig{}
-	viper.SetDefault("web.host", "0.0.0.0")
-	viper.SetDefault("web.port", 2703)
-	Web.Host = viper.GetString("web.host")
-	Web.Port = viper.GetString("web.port")
-	Web.Username = viper.GetString("web.username")
-	Web.Password = viper.GetString("web.password")
+	Models = state.models
+	Web = state.web
 
 	UpdatedAt = time.Now()
 	logger.Infof("Config loaded, found %d models.", len(Models))
@@ -389,25 +576,29 @@ func loadConfig() error {
 }
 
 func loadModel(key string) (ModelConfig, error) {
+	return loadModelFromViper(viper.GetViper(), key)
+}
+
+func loadModelFromViper(root *viper.Viper, key string) (ModelConfig, error) {
 	var model ModelConfig
 	model.Name = key
 
 	workdir, _ := os.Getwd()
 
 	model.WorkDir = workdir
-	model.TempPath = filepath.Join(viper.GetString("workdir"), fmt.Sprintf("%d", time.Now().UnixNano()))
+	model.TempPath = filepath.Join(root.GetString("workdir"), fmt.Sprintf("%d", time.Now().UnixNano()))
 	model.DumpPath = filepath.Join(model.TempPath, key)
-	model.Viper = viper.Sub("models." + key)
+	model.Viper = root.Sub("models." + key)
 
 	model.Description = model.Viper.GetString("description")
 	model.Schedule = ScheduleConfig{Enabled: false}
 
-    compressViper := model.Viper.Sub("compress_with")
-    if compressViper == nil {
-        compressViper = viper.New()
-    }
-    compressViper.SetDefault("type", "tar")
-    compressViper.SetDefault("filename_format", "2006.01.02.15.04.05")
+	compressViper := model.Viper.Sub("compress_with")
+	if compressViper == nil {
+		compressViper = viper.New()
+	}
+	compressViper.SetDefault("type", "tar")
+	compressViper.SetDefault("filename_format", "2006.01.02.15.04.05")
 	model.CompressWith = SubConfig{
 		Type:  compressViper.GetString("type"),
 		Viper: compressViper,

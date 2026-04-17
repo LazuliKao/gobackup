@@ -25,3 +25,4 @@ log/
 tests/backups/
 tests/data/
 /.sisyphus
+web/tsconfig.tsbuildinfo

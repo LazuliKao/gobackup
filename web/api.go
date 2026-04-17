@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-contrib/static"
@@ -25,6 +27,8 @@ import (
 var staticFS embed.FS
 var logFile *os.File
 var storageDownload = storage.Download
+
+var errConfigPathNotFound = errors.New("config file not found")
 
 type embedFileSystem struct {
 	http.FileSystem
@@ -118,11 +122,37 @@ func setupRouter(version string) *gin.Engine {
 
 	group := r.Group("/api")
 	group.GET("/config", getConfig)
+	configGroup := group.Group("/config")
+	configGroup.Use(requireConfigEditorAuth)
+	configGroup.GET("/paths", getConfigPaths)
+	configGroup.GET("/raw", getConfigRaw)
+	configGroup.POST("/save", saveConfig)
+	configGroup.POST("/validate", validateConfig)
 	group.GET("/list", list)
 	group.GET("/download", download)
 	group.POST("/perform", perform)
 	group.GET("/log", log)
 	return r
+}
+
+func requireConfigEditorAuth(c *gin.Context) {
+	if len(config.Web.Username) == 0 || len(config.Web.Password) == 0 {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"message": "Config editor requires API authentication.",
+		})
+		return
+	}
+
+	username, password, ok := c.Request.BasicAuth()
+	if !ok || username != config.Web.Username || password != config.Web.Password {
+		c.Header("WWW-Authenticate", `Basic realm="Authorization Required"`)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"message": "Authentication required.",
+		})
+		return
+	}
+
+	c.Next()
 }
 
 // GET /api/config
@@ -138,6 +168,335 @@ func getConfig(c *gin.Context) {
 
 	c.JSON(200, gin.H{
 		"models": models,
+	})
+}
+
+type configPathResponse struct {
+	Paths        []string                `json:"paths"`
+	AllowedPaths []configPathStatusEntry `json:"allowed_paths,omitempty"`
+	CurrentPath  string                  `json:"current_path,omitempty"`
+}
+
+type configPathStatus struct {
+	Path   string
+	Exists bool
+	Err    error
+}
+
+type configPathStatusEntry struct {
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
+}
+
+
+func configPathStatuses() []configPathStatus {
+	knownPaths := config.KnownConfigFilePaths()
+	statuses := make([]configPathStatus, 0, len(knownPaths))
+	for _, candidate := range knownPaths {
+		_, err := os.Stat(candidate)
+		exists := err == nil
+		if err != nil && errors.Is(err, os.ErrNotExist) {
+			err = nil
+		}
+		statuses = append(statuses, configPathStatus{
+			Path:   candidate,
+			Exists: exists,
+			Err:    err,
+		})
+	}
+
+	return statuses
+}
+
+func allowedConfigPaths() []configPathStatusEntry {
+	statuses := configPathStatuses()
+	allowedPaths := make([]configPathStatusEntry, 0, len(statuses))
+	for _, status := range statuses {
+		allowedPaths = append(allowedPaths, configPathStatusEntry{
+			Path:   status.Path,
+			Exists: status.Exists,
+		})
+	}
+
+	return allowedPaths
+}
+
+func existingConfigPaths() []string {
+	statuses := configPathStatuses()
+	existingPaths := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Exists {
+			existingPaths = append(existingPaths, status.Path)
+		}
+	}
+
+	return existingPaths
+}
+
+func resolveConfigPath(requestedPath string, allowMissing bool) (string, error) {
+	statuses := configPathStatuses()
+
+	if requestedPath != "" {
+		resolvedPath, ok := config.ResolveKnownConfigFilePath(requestedPath)
+		if !ok {
+			return "", errConfigPathNotFound
+		}
+
+		for _, status := range statuses {
+			if status.Path == resolvedPath {
+				if status.Err != nil {
+					return "", status.Err
+				}
+				if status.Exists || allowMissing {
+					return status.Path, nil
+				}
+
+				return "", errConfigPathNotFound
+			}
+		}
+
+		return "", errConfigPathNotFound
+	}
+
+	currentPath := config.CurrentConfigFilePath()
+	for _, status := range statuses {
+		if status.Path == currentPath {
+			if status.Err != nil {
+				return "", status.Err
+			}
+			if status.Exists || allowMissing {
+				return status.Path, nil
+			}
+
+			break
+		}
+	}
+
+	existingPaths := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Err != nil {
+			return "", status.Err
+		}
+		if status.Exists {
+			existingPaths = append(existingPaths, status.Path)
+		}
+	}
+
+	if len(existingPaths) == 0 {
+		if allowMissing && len(statuses) > 0 {
+			return statuses[0].Path, nil
+		}
+
+		return "", errConfigPathNotFound
+	}
+
+	return existingPaths[0], nil
+}
+
+// GET /api/config/paths
+func getConfigPaths(c *gin.Context) {
+	c.JSON(200, configPathResponse{
+		Paths:        existingConfigPaths(),
+		AllowedPaths: allowedConfigPaths(),
+		CurrentPath:  config.CurrentConfigFilePath(),
+	})
+}
+
+// GET /api/config/raw
+func getConfigRaw(c *gin.Context) {
+	configPath, err := resolveConfigPath(c.Query("path"), false)
+	if err != nil {
+		statusCode := 500
+		if errors.Is(err, errConfigPathNotFound) {
+			statusCode = 404
+		}
+		c.AbortWithError(statusCode, err)
+		return
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		c.AbortWithError(500, err)
+		return
+	}
+
+	c.Data(200, "text/plain; charset=utf-8", content)
+}
+
+type saveConfigParam struct {
+	Path            *string `json:"path" binding:"required"`
+	Content         *string `json:"content" binding:"required"`
+	CreateIfMissing bool    `json:"create_if_missing"`
+}
+
+type validateConfigParam struct {
+	Path    *string `json:"path"`
+	Content *string `json:"content" binding:"required"`
+}
+
+func writeConfigAtomically(configPath string, content []byte) error {
+	fileInfo, err := os.Stat(configPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return writeNewConfigAtomically(configPath, content)
+		}
+		return err
+	}
+
+	if fileInfo.IsDir() {
+		return errConfigPathNotFound
+	}
+
+	tempFile, err := os.CreateTemp(filepath.Dir(configPath), filepath.Base(configPath)+".*.tmp")
+	if err != nil {
+		return err
+	}
+
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+
+	if _, err := tempFile.Write(content); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Chmod(fileInfo.Mode()); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tempPath, configPath)
+}
+
+func writeNewConfigAtomically(configPath string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		return err
+	}
+
+	tempFile, err := os.CreateTemp(filepath.Dir(configPath), filepath.Base(configPath)+".*.tmp")
+	if err != nil {
+		return err
+	}
+
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+
+	if _, err := tempFile.Write(content); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Chmod(0600); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		return err
+	}
+
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tempPath, configPath)
+}
+
+// POST /api/config/save
+func saveConfig(c *gin.Context) {
+	var param saveConfigParam
+	if err := c.ShouldBindJSON(&param); err != nil {
+		c.AbortWithError(400, err)
+		return
+	}
+
+	if *param.Path == "" {
+		c.AbortWithError(400, fmt.Errorf("Path is required"))
+		return
+	}
+
+	configPath, err := resolveConfigPath(*param.Path, param.CreateIfMissing)
+	if err != nil {
+		statusCode := 500
+		if errors.Is(err, errConfigPathNotFound) {
+			statusCode = 404
+		}
+		c.AbortWithError(statusCode, err)
+		return
+	}
+
+	if _, err := os.Stat(configPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if !param.CreateIfMissing {
+				c.AbortWithError(404, errConfigPathNotFound)
+				return
+			}
+		} else {
+			c.AbortWithError(500, err)
+			return
+		}
+	}
+
+	if err := config.ValidateRuntimeConfig(configPath, []byte(*param.Content)); err != nil {
+		c.AbortWithError(400, err)
+		return
+	}
+
+	if err := writeConfigAtomically(configPath, []byte(*param.Content)); err != nil {
+		c.AbortWithError(500, err)
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Config saved successfully.",
+	})
+}
+
+// POST /api/config/validate
+func validateConfig(c *gin.Context) {
+	var param validateConfigParam
+	if err := c.ShouldBindJSON(&param); err != nil {
+		c.AbortWithError(400, err)
+		return
+	}
+
+	requestedPath := ""
+	if param.Path != nil {
+		requestedPath = *param.Path
+	}
+
+	configPath, err := resolveConfigPath(requestedPath, requestedPath != "")
+	if err != nil {
+		statusCode := 500
+		if errors.Is(err, errConfigPathNotFound) {
+			statusCode = 404
+		}
+		c.AbortWithError(statusCode, err)
+		return
+	}
+
+	if err := config.ValidateRuntimeConfig(configPath, []byte(*param.Content)); err != nil {
+		c.AbortWithError(400, err)
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Config is valid.",
+		"valid":   true,
 	})
 }
 

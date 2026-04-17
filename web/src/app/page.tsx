@@ -14,6 +14,7 @@ import { api, ModelConfig } from '@/lib/api';
 import Icon from '@/components/icon';
 import ModelGrid from '@/components/model-grid';
 import LogDialog from '@/components/log-dialog';
+import ConfigEditor from '@/components/config-editor';
 import BrowserClient from '@/app/browser/browser-client';
 
 export default function Home() {
@@ -78,6 +79,7 @@ export default function Home() {
         >
           <Tab value="dashboard" icon={<Icon name="dashboard" />}>Dashboard</Tab>
           <Tab value="browser" icon={<Icon name="folder-zip" />}>Browser</Tab>
+          <Tab value="config" icon={<Icon name="settings-3" />}>Config</Tab>
         </TabList>
         
         {selectedTab === 'dashboard' && (
@@ -142,6 +144,10 @@ export default function Home() {
                 </div>
               )}
             </div>
+          )}
+
+          {selectedTab === 'config' && (
+            <ConfigEditor />
           )}
       </div>
     </div>
