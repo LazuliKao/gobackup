@@ -20,6 +20,8 @@ import (
 	"github.com/gobackup/gobackup/logger"
 )
 
+const fallbackConfigFilePerm os.FileMode = 0o600
+
 var (
 	missingPropertiesPattern = regexp.MustCompile(`missing properties?: (.+)$`)
 	typeErrorPattern         = regexp.MustCompile(`expected ([^,]+), but got ([^\s]+)`)
@@ -573,6 +575,44 @@ skipValidation:
 	logger.Infof("Config loaded, found %d models.", len(Models))
 
 	return nil
+}
+
+func ValidateConfigContent(content []byte) error {
+	validatedViper := viper.New()
+	validatedViper.SetConfigType("yaml")
+
+	if err := validatedViper.ReadConfig(strings.NewReader(os.ExpandEnv(string(content)))); err != nil {
+		return err
+	}
+
+	models := validatedViper.GetStringMap("models")
+	if len(models) == 0 {
+		return fmt.Errorf("no model found in config")
+	}
+
+	for key := range models {
+		modelViper := validatedViper.Sub("models." + key)
+		if modelViper == nil {
+			return fmt.Errorf("load model %s: model config not found", key)
+		}
+
+		model := ModelConfig{Name: key, Viper: modelViper}
+		loadStoragesConfig(&model)
+		if len(model.Storages) == 0 {
+			return fmt.Errorf("load model %s: no storage found in model %s", key, key)
+		}
+	}
+
+	return nil
+}
+
+func ConfigFilePerm(path string) os.FileMode {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fallbackConfigFilePerm
+	}
+
+	return info.Mode().Perm()
 }
 
 func loadModel(key string) (ModelConfig, error) {
