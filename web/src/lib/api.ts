@@ -1,5 +1,53 @@
 const API_URL = '/api';
 
+export interface ConfigFileMessageResponse {
+  message: string;
+}
+
+export class ApiError extends Error {
+  status: number;
+
+  payload?: ConfigFileMessageResponse;
+
+  constructor(status: number, message: string, payload?: ConfigFileMessageResponse) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+const fallbackApiErrorMessage = (status: number): string => {
+  return `Request failed with status ${status}`;
+};
+
+const readApiMessage = async (res: Response): Promise<ConfigFileMessageResponse> => {
+  const text = await res.text();
+
+  if (!text) {
+    return { message: fallbackApiErrorMessage(res.status) };
+  }
+
+  try {
+    const data = JSON.parse(text) as Partial<ConfigFileMessageResponse>;
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return { message: data.message };
+    }
+  } catch {
+    // Fall through to raw text/fallback handling.
+  }
+
+  const trimmed = text.trim();
+  return {
+    message: trimmed || fallbackApiErrorMessage(res.status),
+  };
+};
+
+const throwApiError = async (res: Response): Promise<never> => {
+  const payload = await readApiMessage(res);
+  throw new ApiError(res.status, payload.message, payload);
+};
+
 export interface ModelConfig {
   description?: string;
   schedule?: {
@@ -26,9 +74,43 @@ export interface PerformResponse {
   message: string;
 }
 
+export interface ConfigFileResponse {
+  yaml: string;
+}
+
 export const api = {
   getConfig: async (): Promise<ConfigResponse> => {
     const res = await fetch(`${API_URL}/config`);
+    return res.json();
+  },
+
+  getConfigFile: async (): Promise<string> => {
+    const res = await fetch(`${API_URL}/config/file`);
+
+    if (!res.ok) {
+      await throwApiError(res);
+    }
+
+    return res.text();
+  },
+
+  loadConfigFile: async (): Promise<string> => {
+    return api.getConfigFile();
+  },
+
+  saveConfigFile: async (yaml: string): Promise<ConfigFileMessageResponse> => {
+    const res = await fetch(`${API_URL}/config/file`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/yaml',
+      },
+      body: yaml,
+    });
+
+    if (!res.ok) {
+      await throwApiError(res);
+    }
+
     return res.json();
   },
 

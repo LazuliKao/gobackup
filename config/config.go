@@ -16,6 +16,8 @@ import (
 	"github.com/gobackup/gobackup/logger"
 )
 
+const fallbackConfigFilePerm os.FileMode = 0o600
+
 var (
 	// Exist Is config file exist
 	Exist bool
@@ -238,6 +240,44 @@ func loadConfig() error {
 	return nil
 }
 
+func ValidateConfigContent(content []byte) error {
+	validatedViper := viper.New()
+	validatedViper.SetConfigType("yaml")
+
+	if err := validatedViper.ReadConfig(strings.NewReader(os.ExpandEnv(string(content)))); err != nil {
+		return err
+	}
+
+	models := validatedViper.GetStringMap("models")
+	if len(models) == 0 {
+		return fmt.Errorf("no model found in config")
+	}
+
+	for key := range models {
+		modelViper := validatedViper.Sub("models." + key)
+		if modelViper == nil {
+			return fmt.Errorf("load model %s: model config not found", key)
+		}
+
+		model := ModelConfig{Name: key, Viper: modelViper}
+		loadStoragesConfig(&model)
+		if len(model.Storages) == 0 {
+			return fmt.Errorf("load model %s: no storage found in model %s", key, key)
+		}
+	}
+
+	return nil
+}
+
+func ConfigFilePerm(path string) os.FileMode {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fallbackConfigFilePerm
+	}
+
+	return info.Mode().Perm()
+}
+
 func loadModel(key string) (ModelConfig, error) {
 	var model ModelConfig
 	model.Name = key
@@ -252,12 +292,12 @@ func loadModel(key string) (ModelConfig, error) {
 	model.Description = model.Viper.GetString("description")
 	model.Schedule = ScheduleConfig{Enabled: false}
 
-    compressViper := model.Viper.Sub("compress_with")
-    if compressViper == nil {
-        compressViper = viper.New()
-    }
-    compressViper.SetDefault("type", "tar")
-    compressViper.SetDefault("filename_format", "2006.01.02.15.04.05")
+	compressViper := model.Viper.Sub("compress_with")
+	if compressViper == nil {
+		compressViper = viper.New()
+	}
+	compressViper.SetDefault("type", "tar")
+	compressViper.SetDefault("filename_format", "2006.01.02.15.04.05")
 	model.CompressWith = SubConfig{
 		Type:  compressViper.GetString("type"),
 		Viper: compressViper,

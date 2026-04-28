@@ -1,5 +1,7 @@
 test:
 	GO_ENV=test go test ./...
+generate_config_schema:
+	go generate ./config
 test\:all:
 	@sh tests/test.sh
 build_web:

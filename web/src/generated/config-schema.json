@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "web": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "models": {
+      "additionalProperties": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "schedule": {
+            "properties": {
+              "cron": {
+                "type": "string"
+              },
+              "every": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "compress_with": {
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "filename_format": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "salt": {
+                "type": "boolean"
+              },
+              "openssl": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "encrypt_with": {
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "filename_format": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "salt": {
+                "type": "boolean"
+              },
+              "openssl": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "archive": {
+            "properties": {
+              "includes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "excludes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "split_with": {
+            "properties": {
+              "type": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "databases": {
+            "additionalProperties": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "host": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                },
+                "database": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "rdb_path": {
+                  "type": "string"
+                },
+                "invoke_save": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "storages": {
+            "additionalProperties": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "keep": {
+                  "type": "integer"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "host": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                },
+                "private_key": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "type": "integer"
+                },
+                "bucket": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": "string"
+                },
+                "access_key_id": {
+                  "type": "string"
+                },
+                "secret_access_key": {
+                  "type": "string"
+                },
+                "account": {
+                  "type": "string"
+                },
+                "tenant_id": {
+                  "type": "string"
+                },
+                "client_id": {
+                  "type": "string"
+                },
+                "client_secret": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "notifiers": {
+            "additionalProperties": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "default_storage": {
+            "type": "string"
+          },
+          "before_script": {
+            "type": "string"
+          },
+          "after_script": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object"
+}

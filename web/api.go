@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,6 +17,7 @@ import (
 	"github.com/gobackup/gobackup/logger"
 	"github.com/gobackup/gobackup/model"
 	"github.com/gobackup/gobackup/storage"
+	"github.com/spf13/viper"
 	"github.com/stoicperlman/fls"
 )
 
@@ -115,6 +117,8 @@ func setupRouter(version string) *gin.Engine {
 
 	group := r.Group("/api")
 	group.GET("/config", getConfig)
+	group.GET("/config/file", getConfigFile)
+	group.POST("/config/file", saveConfigFile)
 	group.GET("/list", list)
 	group.GET("/download", download)
 	group.POST("/perform", perform)
@@ -136,6 +140,67 @@ func getConfig(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"models": models,
 	})
+}
+
+// GET /api/config/file
+func getConfigFile(c *gin.Context) {
+	configFile := viper.ConfigFileUsed()
+	if len(configFile) == 0 {
+		c.AbortWithStatusJSON(404, gin.H{"message": "config file not found"})
+		return
+	}
+
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		c.AbortWithStatusJSON(500, gin.H{"message": fmt.Sprintf("failed to read config file %s: %v", configFile, err)})
+		return
+	}
+
+	c.Data(200, "text/yaml; charset=utf-8", content)
+}
+
+// POST /api/config/file
+func saveConfigFile(c *gin.Context) {
+	configFile := viper.ConfigFileUsed()
+	if len(configFile) == 0 {
+		c.AbortWithStatusJSON(404, gin.H{"message": "config file not found"})
+		return
+	}
+
+	info, err := os.Stat(configFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(404, gin.H{"message": fmt.Sprintf("config file not found: %s", configFile)})
+			return
+		}
+
+		c.AbortWithStatusJSON(500, gin.H{"message": fmt.Sprintf("failed to inspect config file %s: %v", configFile, err)})
+		return
+	}
+
+	body, err := c.GetRawData()
+	if err != nil {
+		c.AbortWithStatusJSON(400, gin.H{"message": fmt.Sprintf("failed to read request body: %v", err)})
+		return
+	}
+
+	if err := config.ValidateConfigContent(body); err != nil {
+		c.AbortWithStatusJSON(400, gin.H{"message": fmt.Sprintf("invalid config file: %v", err)})
+		return
+	}
+
+	perm := info.Mode().Perm()
+	if err := os.WriteFile(configFile, body, perm); err != nil {
+		statusCode := 500
+		if errors.Is(err, os.ErrNotExist) {
+			statusCode = 404
+		}
+
+		c.AbortWithStatusJSON(statusCode, gin.H{"message": fmt.Sprintf("failed to write config file %s: %v", configFile, err)})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "config file saved"})
 }
 
 // POST /api/perform

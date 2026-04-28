@@ -13,6 +13,7 @@ require (
 	github.com/fatih/color v1.14.1
 	github.com/go-co-op/gocron v1.18.0
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
+	github.com/invopop/jsonschema v0.13.0
 	github.com/jlaffaye/ftp v0.1.0
 	github.com/joho/godotenv v1.4.0
 	github.com/longbridgeapp/assert v1.1.0
@@ -27,8 +28,12 @@ require (
 
 require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 )
 
 require (

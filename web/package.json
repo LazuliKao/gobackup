@@ -27,8 +27,11 @@
   "dependencies": {
     "@fluentui/react-components": "^9.73.7",
     "@fluentui/react-icons": "^2.0.316",
+    "@monaco-editor/react": "^4.7.0",
     "@preact/preset-vite": "^2.10.5",
     "@tailwindcss/vite": "^4.2.2",
+    "monaco-editor": "0.52.0",
+    "monaco-yaml": "^5.4.1",
     "preact": "^10.29.1",
     "preact-iso": "^2.11.1",
     "react-lazylog": "^4.5.3",

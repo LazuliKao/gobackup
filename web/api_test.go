@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobackup/gobackup/config"
 	"github.com/longbridgeapp/assert"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -49,6 +53,42 @@ func invokeHttp(method string, path string, headers map[string]string, data map[
 	return w.Code, w.Body.String()
 }
 
+func invokeHttpBody(method string, path string, headers map[string]string, body []byte) (statusCode int, responseBody string) {
+	r := setupRouter("master")
+	w := httptest.NewRecorder()
+
+	req, _ := http.NewRequest(method, path, bytes.NewBuffer(body))
+	for key := range headers {
+		req.Header.Add(key, headers[key])
+	}
+
+	r.ServeHTTP(w, req)
+
+	return w.Code, w.Body.String()
+}
+
+func withTempConfigFile(t *testing.T) string {
+	t.Helper()
+
+	originalConfigFile := viper.ConfigFileUsed()
+	originalContent, err := os.ReadFile(originalConfigFile)
+	assert.NoError(t, err)
+
+	tempConfigFile := filepath.Join(t.TempDir(), filepath.Base(originalConfigFile))
+	err = os.WriteFile(tempConfigFile, originalContent, 0o600)
+	assert.NoError(t, err)
+
+	err = config.Init(tempConfigFile)
+	assert.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := config.Init(originalConfigFile)
+		assert.NoError(t, err)
+	})
+
+	return tempConfigFile
+}
+
 func TestAPIStatus(t *testing.T) {
 	code, body := invokeHttp("GET", "/status", nil, nil)
 
@@ -60,6 +100,104 @@ func TestAPIGetModels(t *testing.T) {
 	code, _ := invokeHttp("GET", "/api/config", nil, nil)
 
 	assert.Equal(t, 200, code)
+}
+
+func TestAPIGetConfigFile(t *testing.T) {
+	code, body := invokeHttp("GET", "/api/config/file", nil, nil)
+
+	assert.Equal(t, 200, code)
+
+	expected, err := os.ReadFile(viper.ConfigFileUsed())
+	assert.NoError(t, err)
+	assert.Equal(t, string(expected), body)
+}
+
+func TestAPIPostConfigFileSavesValidYAML(t *testing.T) {
+	tempConfigFile := withTempConfigFile(t)
+	originalContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+
+	updatedContent := strings.Replace(string(originalContent), "description: \"This is base test.\"", "description: \"Updated from API save test.\"", 1)
+	code, body := invokeHttpBody("POST", "/api/config/file", map[string]string{"Content-Type": "text/yaml"}, []byte(updatedContent))
+
+	assert.Equal(t, 200, code)
+	assertMatchJSON(t, gin.H{"message": "config file saved"}, body)
+
+	savedContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+	assert.Equal(t, updatedContent, string(savedContent))
+
+	err = os.WriteFile(tempConfigFile, originalContent, 0o600)
+	assert.NoError(t, err)
+
+	restoredContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalContent), string(restoredContent))
+}
+
+func TestAPIPostConfigFileRejectsInvalidYAML(t *testing.T) {
+	tempConfigFile := withTempConfigFile(t)
+	originalContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+
+	invalidContent := []byte("models:\n  broken: [\n")
+	code, body := invokeHttpBody("POST", "/api/config/file", map[string]string{"Content-Type": "text/yaml"}, invalidContent)
+
+	assert.Equal(t, 400, code)
+	assert.Equal(t, true, strings.Contains(body, "invalid config file:"))
+
+	currentContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalContent), string(currentContent))
+}
+
+func TestAPIPostConfigFileRequiresActivePath(t *testing.T) {
+	originalConfigFile := viper.ConfigFileUsed()
+	t.Cleanup(func() {
+		err := config.Init(originalConfigFile)
+		assert.NoError(t, err)
+	})
+
+	viper.Reset()
+	viper.SetConfigType("yaml")
+
+	code, body := invokeHttpBody("POST", "/api/config/file", map[string]string{"Content-Type": "text/yaml"}, []byte("models: {}\n"))
+
+	assert.Equal(t, 404, code)
+	assertMatchJSON(t, gin.H{"message": "config file not found"}, body)
+}
+
+func TestAPIPostConfigFileRejectsMissingActiveFile(t *testing.T) {
+	tempConfigFile := withTempConfigFile(t)
+	originalContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+
+	err = os.Remove(tempConfigFile)
+	assert.NoError(t, err)
+
+	code, body := invokeHttpBody("POST", "/api/config/file", map[string]string{"Content-Type": "text/yaml"}, originalContent)
+
+	assert.Equal(t, 404, code)
+	assert.Equal(t, true, strings.Contains(body, "config file not found:"))
+
+	_, err = os.Stat(tempConfigFile)
+	assert.Equal(t, true, os.IsNotExist(err))
+}
+
+func TestAPIPostConfigFileRejectsConfigWithoutModels(t *testing.T) {
+	tempConfigFile := withTempConfigFile(t)
+	originalContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+
+	invalidContent := []byte("web:\n  username: gobackup\n")
+	code, body := invokeHttpBody("POST", "/api/config/file", map[string]string{"Content-Type": "text/yaml"}, invalidContent)
+
+	assert.Equal(t, 400, code)
+	assert.Equal(t, true, strings.Contains(body, "invalid config file: no model found in config"))
+
+	currentContent, err := os.ReadFile(tempConfigFile)
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalContent), string(currentContent))
 }
 
 func TestAPIPostPeform(t *testing.T) {
