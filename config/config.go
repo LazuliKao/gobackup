@@ -46,10 +46,20 @@ var (
 )
 
 type WebConfig struct {
-	Host     string
-	Port     string
-	Username string
-	Password string
+	Host      string
+	Port      string
+	Username  string
+	Password  string
+	AuthMode  string
+	ProxyAuth ProxyAuthConfig
+}
+
+type ProxyAuthConfig struct {
+	TrustedProxies []string
+	UserHeader     string
+	GroupHeader    string
+	AllowedUsers   []string
+	AllowedGroups  []string
 }
 
 type ScheduleConfig struct {
@@ -469,10 +479,21 @@ func parseRuntimeConfig(expandedCfg []byte, cleanupTempWorkDir bool) (_ *viper.V
 
 	v.SetDefault("web.host", "0.0.0.0")
 	v.SetDefault("web.port", 2703)
+	v.SetDefault("web.auth_mode", "basic")
+	v.SetDefault("web.proxy_auth.user_header", "Remote-User")
+	v.SetDefault("web.proxy_auth.group_header", "Remote-Groups")
 	state.web.Host = v.GetString("web.host")
 	state.web.Port = v.GetString("web.port")
 	state.web.Username = v.GetString("web.username")
 	state.web.Password = v.GetString("web.password")
+	state.web.AuthMode = v.GetString("web.auth_mode")
+	state.web.ProxyAuth = ProxyAuthConfig{
+		TrustedProxies: v.GetStringSlice("web.proxy_auth.trusted_proxies"),
+		UserHeader:     v.GetString("web.proxy_auth.user_header"),
+		GroupHeader:    v.GetString("web.proxy_auth.group_header"),
+		AllowedUsers:   v.GetStringSlice("web.proxy_auth.allowed_users"),
+		AllowedGroups:  v.GetStringSlice("web.proxy_auth.allowed_groups"),
+	}
 
 	return v, state, nil
 }

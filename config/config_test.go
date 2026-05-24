@@ -147,6 +147,12 @@ func TestWebConfig(t *testing.T) {
 	assert.Equal(t, Web.Port, "2703")
 	assert.Equal(t, Web.Username, "gobackup")
 	assert.Equal(t, Web.Password, "123456")
+	assert.Equal(t, Web.AuthMode, "basic")
+	assert.Equal(t, Web.ProxyAuth.TrustedProxies, []string{"127.0.0.1"})
+	assert.Equal(t, Web.ProxyAuth.UserHeader, "Remote-User")
+	assert.Equal(t, Web.ProxyAuth.GroupHeader, "Remote-Groups")
+	assert.Equal(t, Web.ProxyAuth.AllowedUsers, []string{"alice"})
+	assert.Equal(t, Web.ProxyAuth.AllowedGroups, []string{"admins"})
 }
 
 func TestInitWithNotExistsConfigFile(t *testing.T) {

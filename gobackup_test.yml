@@ -5,6 +5,16 @@
 web:
   username: gobackup
   password: 123456
+  auth_mode: basic
+  proxy_auth:
+    trusted_proxies:
+      - 127.0.0.1
+    user_header: Remote-User
+    group_header: Remote-Groups
+    allowed_users:
+      - alice
+    allowed_groups:
+      - admins
 models:
   base_test:
     description: "This is base test."
