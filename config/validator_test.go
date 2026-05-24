@@ -101,6 +101,28 @@ models:
 `,
 		},
 		{
+			name: "config with proxy auth web settings",
+			config: `
+web:
+  auth_mode: proxy
+  proxy_auth:
+    trusted_proxies:
+      - 127.0.0.1
+      - 10.0.0.0/8
+    user_header: Remote-User
+    group_header: Remote-Groups
+    allowed_users:
+      - alice
+    allowed_groups:
+      - admins
+models:
+  my_backup:
+    storages:
+      local:
+        type: local
+`,
+		},
+		{
 			name: "config with multiple storages",
 			config: `
 models:
