@@ -12,10 +12,21 @@ type ConfigSchemaSpec struct {
 
 // WebSchemaSpec describes web auth settings.
 type WebSchemaSpec struct {
-	Host     string `json:"host,omitempty" yaml:"host,omitempty"`
-	Port     string `json:"port,omitempty" yaml:"port,omitempty"`
-	Username string `json:"username,omitempty" yaml:"username,omitempty"`
-	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+	Host      string              `json:"host,omitempty" yaml:"host,omitempty"`
+	Port      string              `json:"port,omitempty" yaml:"port,omitempty"`
+	Username  string              `json:"username,omitempty" yaml:"username,omitempty"`
+	Password  string              `json:"password,omitempty" yaml:"password,omitempty"`
+	AuthMode  string              `json:"auth_mode,omitempty" yaml:"auth_mode,omitempty"`
+	ProxyAuth ProxyAuthSchemaSpec `json:"proxy_auth,omitempty" yaml:"proxy_auth,omitempty"`
+}
+
+// ProxyAuthSchemaSpec describes reverse proxy authentication settings.
+type ProxyAuthSchemaSpec struct {
+	TrustedProxies []string `json:"trusted_proxies,omitempty" yaml:"trusted_proxies,omitempty"`
+	UserHeader     string   `json:"user_header,omitempty" yaml:"user_header,omitempty"`
+	GroupHeader    string   `json:"group_header,omitempty" yaml:"group_header,omitempty"`
+	AllowedUsers   []string `json:"allowed_users,omitempty" yaml:"allowed_users,omitempty"`
+	AllowedGroups  []string `json:"allowed_groups,omitempty" yaml:"allowed_groups,omitempty"`
 }
 
 // ModelSchemaSpec describes one backup model.

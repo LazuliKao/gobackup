@@ -14,6 +14,39 @@
         },
         "password": {
           "type": "string"
+        },
+        "auth_mode": {
+          "type": "string"
+        },
+        "proxy_auth": {
+          "properties": {
+            "trusted_proxies": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "user_header": {
+              "type": "string"
+            },
+            "group_header": {
+              "type": "string"
+            },
+            "allowed_users": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "allowed_groups": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
         }
       },
       "additionalProperties": false,

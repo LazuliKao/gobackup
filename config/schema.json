@@ -21,7 +21,10 @@
           "description": "Compression type"
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "ConfigSchema": {
       "properties": {
@@ -44,7 +47,10 @@
           "description": "Backup models keyed by model name."
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "models"
+      ]
     },
     "DatabaseSubConfig": {
       "properties": {
@@ -72,7 +78,10 @@
           "description": "Database type"
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "EncryptSubConfig": {
       "properties": {
@@ -90,7 +99,10 @@
           "description": "Encryption type"
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "ModelConfig": {
       "properties": {
@@ -169,7 +181,10 @@
           "description": "Script executed after backup."
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "storages"
+      ]
     },
     "NotifierSubConfig": {
       "properties": {
@@ -199,6 +214,48 @@
           ],
           "title": "Type",
           "description": "Notifier type"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
+    "ProxyAuthConfig": {
+      "properties": {
+        "trusted_proxies": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "TrustedProxies",
+          "description": "Trusted reverse proxy IP addresses or CIDR ranges."
+        },
+        "user_header": {
+          "type": "string",
+          "title": "UserHeader",
+          "description": "Header containing authenticated username."
+        },
+        "group_header": {
+          "type": "string",
+          "title": "GroupHeader",
+          "description": "Header containing authenticated groups."
+        },
+        "allowed_users": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "AllowedUsers",
+          "description": "Users allowed to use the config editor."
+        },
+        "allowed_groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "AllowedGroups",
+          "description": "Groups allowed to use the config editor."
         }
       },
       "type": "object"
@@ -258,7 +315,10 @@
           "description": "Storage type"
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "WebConfig": {
       "properties": {
@@ -281,6 +341,16 @@
           "type": "string",
           "title": "Password",
           "description": "Web UI password."
+        },
+        "auth_mode": {
+          "type": "string",
+          "title": "AuthMode",
+          "description": "Config editor auth mode. basic proxy or basic_or_proxy."
+        },
+        "proxy_auth": {
+          "$ref": "#/$defs/ProxyAuthConfig",
+          "title": "ProxyAuth",
+          "description": "Reverse proxy authentication settings."
         }
       },
       "type": "object"

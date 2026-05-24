@@ -11,14 +11,24 @@ import (
 type ConfigSchema struct {
 	WorkDir string                 `json:"workdir,omitempty" jsonschema:"title=WorkDir,description=Base working directory for temporary backup files."`
 	Web     WebConfig              `json:"web,omitempty" jsonschema:"title=WebConfig,description=Web UI and API server configuration."`
-	Models  map[string]ModelConfig `json:"models" jsonschema:"title=Models,description=Backup models keyed by model name."`
+	Models  map[string]ModelConfig `json:"models" jsonschema:"required,title=Models,description=Backup models keyed by model name.,minProperties=1"`
 }
 
 type WebConfig struct {
-	Host     string `json:"host,omitempty" jsonschema:"title=Host,description=Web server bind host."`
-	Port     string `json:"port,omitempty" jsonschema:"title=Port,description=Web server port."`
-	Username string `json:"username,omitempty" jsonschema:"title=Username,description=Web UI username."`
-	Password string `json:"password,omitempty" jsonschema:"title=Password,description=Web UI password."`
+	Host      string          `json:"host,omitempty" jsonschema:"title=Host,description=Web server bind host."`
+	Port      string          `json:"port,omitempty" jsonschema:"title=Port,description=Web server port."`
+	Username  string          `json:"username,omitempty" jsonschema:"title=Username,description=Web UI username."`
+	Password  string          `json:"password,omitempty" jsonschema:"title=Password,description=Web UI password."`
+	AuthMode  string          `json:"auth_mode,omitempty" jsonschema:"title=AuthMode,description=Config editor auth mode. basic proxy or basic_or_proxy."`
+	ProxyAuth ProxyAuthConfig `json:"proxy_auth,omitempty" jsonschema:"title=ProxyAuth,description=Reverse proxy authentication settings."`
+}
+
+type ProxyAuthConfig struct {
+	TrustedProxies []string `json:"trusted_proxies,omitempty" jsonschema:"title=TrustedProxies,description=Trusted reverse proxy IP addresses or CIDR ranges."`
+	UserHeader     string   `json:"user_header,omitempty" jsonschema:"title=UserHeader,description=Header containing authenticated username."`
+	GroupHeader    string   `json:"group_header,omitempty" jsonschema:"title=GroupHeader,description=Header containing authenticated groups."`
+	AllowedUsers   []string `json:"allowed_users,omitempty" jsonschema:"title=AllowedUsers,description=Users allowed to use the config editor."`
+	AllowedGroups  []string `json:"allowed_groups,omitempty" jsonschema:"title=AllowedGroups,description=Groups allowed to use the config editor."`
 }
 
 type ScheduleConfig struct {
@@ -28,19 +38,19 @@ type ScheduleConfig struct {
 }
 
 type ModelConfig struct {
-	Name           string                         `json:"name,omitempty" jsonschema:"title=Name,description=Model name."`
-	Description    string                         `json:"description,omitempty" jsonschema:"title=Description,description=Human readable description for the backup model."`
-	Schedule       ScheduleConfig                 `json:"schedule,omitempty" jsonschema:"title=Schedule,description=Backup schedule configuration."`
-	CompressWith   CompressSubConfig              `json:"compress_with,omitempty" jsonschema:"title=CompressWith,description=Compression configuration."`
-	EncryptWith    EncryptSubConfig               `json:"encrypt_with,omitempty" jsonschema:"title=EncryptWith,description=Encryption configuration."`
-	Archive        map[string]any                 `json:"archive,omitempty" jsonschema:"title=Archive,description=Archive configuration."`
-	Splitter       map[string]any                 `json:"split_with,omitempty" jsonschema:"title=Splitter,description=Split output configuration."`
-	Databases      map[string]DatabaseSubConfig   `json:"databases,omitempty" jsonschema:"title=Databases,description=Database sources keyed by name."`
-	Storages       map[string]StorageSubConfig    `json:"storages,omitempty" jsonschema:"title=Storages,description=Storage destinations keyed by name."`
-	DefaultStorage string                         `json:"default_storage,omitempty" jsonschema:"title=DefaultStorage,description=Default storage name."`
-	Notifiers      map[string]NotifierSubConfig   `json:"notifiers,omitempty" jsonschema:"title=Notifiers,description=Notification providers keyed by name."`
-	BeforeScript   string                         `json:"before_script,omitempty" jsonschema:"title=BeforeScript,description=Script executed before backup."`
-	AfterScript    string                         `json:"after_script,omitempty" jsonschema:"title=AfterScript,description=Script executed after backup."`
+	Name           string                       `json:"name,omitempty" jsonschema:"title=Name,description=Model name."`
+	Description    string                       `json:"description,omitempty" jsonschema:"title=Description,description=Human readable description for the backup model."`
+	Schedule       ScheduleConfig               `json:"schedule,omitempty" jsonschema:"title=Schedule,description=Backup schedule configuration."`
+	CompressWith   CompressSubConfig            `json:"compress_with,omitempty" jsonschema:"title=CompressWith,description=Compression configuration."`
+	EncryptWith    EncryptSubConfig             `json:"encrypt_with,omitempty" jsonschema:"title=EncryptWith,description=Encryption configuration."`
+	Archive        map[string]any               `json:"archive,omitempty" jsonschema:"title=Archive,description=Archive configuration."`
+	Splitter       map[string]any               `json:"split_with,omitempty" jsonschema:"title=Splitter,description=Split output configuration."`
+	Databases      map[string]DatabaseSubConfig `json:"databases,omitempty" jsonschema:"title=Databases,description=Database sources keyed by name."`
+	Storages       map[string]StorageSubConfig  `json:"storages,omitempty" jsonschema:"required,title=Storages,description=Storage destinations keyed by name.,minProperties=1"`
+	DefaultStorage string                       `json:"default_storage,omitempty" jsonschema:"title=DefaultStorage,description=Default storage name."`
+	Notifiers      map[string]NotifierSubConfig `json:"notifiers,omitempty" jsonschema:"title=Notifiers,description=Notification providers keyed by name."`
+	BeforeScript   string                       `json:"before_script,omitempty" jsonschema:"title=BeforeScript,description=Script executed before backup."`
+	AfterScript    string                       `json:"after_script,omitempty" jsonschema:"title=AfterScript,description=Script executed after backup."`
 }
 
 type SubConfig struct {
@@ -49,32 +59,32 @@ type SubConfig struct {
 
 type DatabaseSubConfig struct {
 	SubConfig
-	Type string `json:"type" jsonschema:"title=Type,description=Database type,enum=mysql,enum=postgresql,enum=redis,enum=mongodb,enum=sqlite,enum=mssql,enum=influxdb,enum=mariadb,enum=etcd,enum=firebird,enum=foundationdb"`
+	Type string `json:"type" jsonschema:"required,title=Type,description=Database type,enum=mysql,enum=postgresql,enum=redis,enum=mongodb,enum=sqlite,enum=mssql,enum=influxdb,enum=mariadb,enum=etcd,enum=firebird,enum=foundationdb"`
 }
 
 type StorageSubConfig struct {
 	SubConfig
-	Type string `json:"type" jsonschema:"title=Type,description=Storage type,enum=local,enum=ftp,enum=sftp,enum=scp,enum=s3,enum=oss,enum=gcs,enum=azure,enum=b2,enum=r2,enum=spaces,enum=cos,enum=us3,enum=kodo,enum=bos,enum=minio,enum=obs,enum=tos,enum=upyun,enum=webdav"`
+	Type string `json:"type" jsonschema:"required,title=Type,description=Storage type,enum=local,enum=ftp,enum=sftp,enum=scp,enum=s3,enum=oss,enum=gcs,enum=azure,enum=b2,enum=r2,enum=spaces,enum=cos,enum=us3,enum=kodo,enum=bos,enum=minio,enum=obs,enum=tos,enum=upyun,enum=webdav"`
 }
 
 type CompressSubConfig struct {
 	SubConfig
-	Type string `json:"type,omitempty" jsonschema:"title=Type,description=Compression type,enum=tar,enum=tgz,enum=7z"`
+	Type string `json:"type,omitempty" jsonschema:"required,title=Type,description=Compression type,enum=tar,enum=tgz,enum=7z"`
 }
 
 type EncryptSubConfig struct {
 	SubConfig
-	Type string `json:"type,omitempty" jsonschema:"title=Type,description=Encryption type,enum=openssl"`
+	Type string `json:"type,omitempty" jsonschema:"required,title=Type,description=Encryption type,enum=openssl"`
 }
 
 type NotifierSubConfig struct {
 	SubConfig
-	Type string `json:"type" jsonschema:"title=Type,description=Notifier type,enum=mail,enum=webhook,enum=discord,enum=slack,enum=feishu,enum=dingtalk,enum=github,enum=telegram,enum=ses,enum=postmark,enum=sendgrid,enum=resend,enum=healthchecks,enum=wxwork,enum=googlechat"`
+	Type string `json:"type" jsonschema:"required,title=Type,description=Notifier type,enum=mail,enum=webhook,enum=discord,enum=slack,enum=feishu,enum=dingtalk,enum=github,enum=telegram,enum=ses,enum=postmark,enum=sendgrid,enum=resend,enum=healthchecks,enum=wxwork,enum=googlechat"`
 }
 
 func main() {
 	reflector := jsonschema.Reflector{
-		AllowAdditionalProperties: true,
+		AllowAdditionalProperties:  true,
 		RequiredFromJSONSchemaTags: true,
 	}
 
