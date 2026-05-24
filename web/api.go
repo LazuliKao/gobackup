@@ -8,10 +8,13 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/static"
@@ -29,6 +32,12 @@ var logFile *os.File
 var storageDownload = storage.Download
 
 var errConfigPathNotFound = errors.New("config file not found")
+
+const (
+	configEditorAuthModeBasic        = "basic"
+	configEditorAuthModeProxy        = "proxy"
+	configEditorAuthModeBasicOrProxy = "basic_or_proxy"
+)
 
 type embedFileSystem struct {
 	http.FileSystem
@@ -79,8 +88,8 @@ func StartHTTP(version string) (err error) {
 
 	r := setupRouter(version)
 
-	// Enable baseAuth
-	if len(config.Web.Username) > 0 && len(config.Web.Password) > 0 {
+	// Enable BasicAuth for the built-in auth mode.
+	if configEditorAuthMode() == configEditorAuthModeBasic && hasBasicAuthConfig() {
 		r.Use(gin.BasicAuth(gin.Accounts{
 			config.Web.Username: config.Web.Password,
 		}))
@@ -121,6 +130,7 @@ func setupRouter(version string) *gin.Engine {
 	})
 
 	group := r.Group("/api")
+	group.Use(requireAPIAuth)
 	group.GET("/config", getConfig)
 	configGroup := group.Group("/config")
 	configGroup.Use(requireConfigEditorAuth)
@@ -136,23 +146,207 @@ func setupRouter(version string) *gin.Engine {
 }
 
 func requireConfigEditorAuth(c *gin.Context) {
-	if len(config.Web.Username) == 0 || len(config.Web.Password) == 0 {
+	mode := configEditorAuthMode()
+	switch mode {
+	case configEditorAuthModeBasic:
+		requireConfigEditorBasicAuth(c)
+	case configEditorAuthModeProxy:
+		requireConfigEditorProxyAuth(c)
+	case configEditorAuthModeBasicOrProxy:
+		if checkConfigEditorBasicAuth(c) || checkConfigEditorProxyAuth(c) {
+			c.Next()
+			return
+		}
+		abortConfigEditorAuthRequired(c)
+	default:
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"message": "Config editor requires API authentication.",
+			"message": "Unsupported config editor authentication mode.",
 		})
+	}
+}
+
+func requireAPIAuth(c *gin.Context) {
+	mode := configEditorAuthMode()
+	switch mode {
+	case configEditorAuthModeBasic:
+		c.Next()
+	case configEditorAuthModeProxy:
+		if checkConfigEditorProxyAuth(c) {
+			c.Next()
+			return
+		}
+		abortConfigEditorProxyAuthRequired(c)
+	case configEditorAuthModeBasicOrProxy:
+		if checkConfigEditorBasicAuth(c) || checkConfigEditorProxyAuth(c) {
+			c.Next()
+			return
+		}
+		abortConfigEditorAuthRequired(c)
+	default:
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"message": "Unsupported config editor authentication mode.",
+		})
+	}
+}
+
+func configEditorAuthMode() string {
+	mode := strings.TrimSpace(config.Web.AuthMode)
+	if mode == "" {
+		return configEditorAuthModeBasic
+	}
+
+	return mode
+}
+
+func hasBasicAuthConfig() bool {
+	return config.Web.Username != "" && config.Web.Password != ""
+}
+
+func requireConfigEditorBasicAuth(c *gin.Context) {
+	if !hasBasicAuthConfig() {
+		abortConfigEditorAuthRequired(c)
 		return
 	}
 
-	username, password, ok := c.Request.BasicAuth()
-	if !ok || username != config.Web.Username || password != config.Web.Password {
-		c.Header("WWW-Authenticate", `Basic realm="Authorization Required"`)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"message": "Authentication required.",
-		})
+	if !checkConfigEditorBasicAuth(c) {
+		abortConfigEditorBasicAuthRequired(c)
 		return
 	}
 
 	c.Next()
+}
+
+func checkConfigEditorBasicAuth(c *gin.Context) bool {
+	if !hasBasicAuthConfig() {
+		return false
+	}
+
+	username, password, ok := c.Request.BasicAuth()
+	return ok && username == config.Web.Username && password == config.Web.Password
+}
+
+func requireConfigEditorProxyAuth(c *gin.Context) {
+	if !hasProxyAuthConfig() {
+		abortConfigEditorAuthRequired(c)
+		return
+	}
+
+	if !checkConfigEditorProxyAuth(c) {
+		abortConfigEditorProxyAuthRequired(c)
+		return
+	}
+
+	c.Next()
+}
+
+func hasProxyAuthConfig() bool {
+	proxyAuth := config.Web.ProxyAuth
+	return proxyAuth.UserHeader != "" && len(proxyAuth.TrustedProxies) > 0 && (len(proxyAuth.AllowedUsers) > 0 || len(proxyAuth.AllowedGroups) > 0)
+}
+
+func checkConfigEditorProxyAuth(c *gin.Context) bool {
+	if !hasProxyAuthConfig() || !requestFromTrustedProxy(c.Request) {
+		return false
+	}
+
+	user, ok := singleHeaderValue(c.Request.Header, config.Web.ProxyAuth.UserHeader)
+	if !ok {
+		return false
+	}
+
+	if stringInSlice(user, config.Web.ProxyAuth.AllowedUsers) {
+		return true
+	}
+
+	groupHeader := strings.TrimSpace(config.Web.ProxyAuth.GroupHeader)
+	if groupHeader == "" || len(config.Web.ProxyAuth.AllowedGroups) == 0 {
+		return false
+	}
+
+	groupsValue, ok := singleHeaderValue(c.Request.Header, groupHeader)
+	if !ok {
+		return false
+	}
+
+	for _, group := range strings.Split(groupsValue, ",") {
+		if stringInSlice(strings.TrimSpace(group), config.Web.ProxyAuth.AllowedGroups) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func requestFromTrustedProxy(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+
+	ip, err := netip.ParseAddr(strings.TrimSpace(host))
+	if err != nil {
+		return false
+	}
+
+	for _, trustedProxy := range config.Web.ProxyAuth.TrustedProxies {
+		trustedProxy = strings.TrimSpace(trustedProxy)
+		if trustedProxy == "" {
+			continue
+		}
+
+		if prefix, err := netip.ParsePrefix(trustedProxy); err == nil {
+			if prefix.Contains(ip) {
+				return true
+			}
+			continue
+		}
+
+		trustedIP, err := netip.ParseAddr(trustedProxy)
+		if err == nil && trustedIP == ip {
+			return true
+		}
+	}
+
+	return false
+}
+
+func singleHeaderValue(header http.Header, name string) (string, bool) {
+	values, ok := header[http.CanonicalHeaderKey(strings.TrimSpace(name))]
+	if !ok || len(values) != 1 {
+		return "", false
+	}
+
+	value := strings.TrimSpace(values[0])
+	return value, value != ""
+}
+
+func stringInSlice(value string, values []string) bool {
+	for _, candidate := range values {
+		if value == strings.TrimSpace(candidate) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func abortConfigEditorAuthRequired(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		"message": "Config editor requires API authentication.",
+	})
+}
+
+func abortConfigEditorBasicAuthRequired(c *gin.Context) {
+	c.Header("WWW-Authenticate", `Basic realm="Authorization Required"`)
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"message": "Authentication required.",
+	})
+}
+
+func abortConfigEditorProxyAuthRequired(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"message": "Proxy authentication required.",
+	})
 }
 
 // GET /api/config
@@ -187,7 +381,6 @@ type configPathStatusEntry struct {
 	Path   string `json:"path"`
 	Exists bool   `json:"exists"`
 }
-
 
 func configPathStatuses() []configPathStatus {
 	knownPaths := config.KnownConfigFilePaths()
